@@ -2,7 +2,7 @@ from datetime import datetime
 from pathlib import Path
 import json
 
-log_dir = (Path(__file__) / "../../logs.txt").resolve()
+log_dir = (Path(__file__) / "../../logs.log").resolve()
 print(f"Logging to: {log_dir}")
 
 def log_apps(apps):
