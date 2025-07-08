@@ -2,6 +2,7 @@ import pywinctl
 import psutil
 
 import Include.app_window_blacklist as blacklist
+import Include.logger as logger
 
 def get_all_apps():
     result = {}
@@ -23,7 +24,7 @@ def get_all_apps():
                 continue
 
             # Skip blacklisted windows
-            if title.lower() in blacklist.window_blacklist.get(name, set()):
+            if title.lower() in blacklist.window_blacklist.get(name.lower(), set()):
                 continue
 
             # Group all window titles under one app
@@ -36,4 +37,4 @@ def get_all_apps():
 
     return result
 
-print(get_all_apps())
+logger.log_apps(get_all_apps())
