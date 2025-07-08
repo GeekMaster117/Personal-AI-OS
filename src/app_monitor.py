@@ -2,7 +2,6 @@ import pywinctl
 import psutil
 
 import Include.app_window_blacklist as blacklist
-import Include.logger as logger
 
 def get_all_apps():
     result = {}
@@ -36,5 +35,3 @@ def get_all_apps():
             continue
 
     return result
-
-logger.log_apps(get_all_apps())
