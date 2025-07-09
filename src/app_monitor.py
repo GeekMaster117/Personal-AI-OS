@@ -28,9 +28,9 @@ def get_all_apps():
 
             # Group all window titles under one app
             if name not in result:
-                result[name] = []
-            result[name].append(title)
-        
+                result[name] = set()
+            result[name].add(title)
+
         except (psutil.NoSuchProcess, psutil.AccessDenied):
             continue
 
