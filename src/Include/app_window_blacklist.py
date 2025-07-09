@@ -7,15 +7,17 @@ app_blacklist = {
     "ctfmon.exe",
     "runtimebroker.exe",
     "startmenuexperiencehost.exe",
-    "systemsettings.exe"
+    "systemsettings.exe",
+    "systemhost.exe"
 }
 
 window_blacklist = {
+    "chrome legacy window"
+}
+
+specific_window_blacklist = {
     "explorer.exe": {
         "running applications",
         "program manager"
-    },
-    "code.exe": {
-        "chrome legacy window"
     }
 }
