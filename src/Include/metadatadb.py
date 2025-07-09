@@ -34,3 +34,49 @@ class MetadataDB:
         self.current_path = ''
 
         self.handle_db()
+
+    def load_app_data(self):
+        self.handle_db()
+
+        self.apps = self.db.get(Query().type == "apps")
+        if not self.apps:
+            self.apps = {"type": "apps", "data": {}}
+            self.db.insert(self.apps)
+
+    def update_app(self, name, title, duration, focus_time, focus_count):
+        if not hasattr(self, 'apps'):
+            print("App data not loaded. Call load_app_data() first.")
+            return
+
+        app_data = self.apps['data']
+        if name not in app_data:
+            app_data[name] = {
+                "titles": {},
+                "duration": 0,
+                "focus_time": 0,
+                "focus_count": 0
+            }
+
+        if title not in app_data[name]["titles"]:
+            app_data[name]["titles"][title] = {
+                "duration": 0,
+                "focus_time": 0,
+                "focus_count": 0
+            }
+        
+        app_data[name]["duration"] += duration
+        app_data[name]["focus_time"] += focus_time
+        app_data[name]["focus_count"] += focus_count
+
+        app_data[name]["titles"][title]["duration"] += duration
+        app_data[name]["titles"][title]["focus_time"] += focus_time
+        app_data[name]["titles"][title]["focus_count"] += focus_count
+
+    def save_app_data(self):
+        if not hasattr(self, 'apps'):
+            print("App data not loaded. Call load_app_data() first.")
+            return
+
+        self.db.update({"data": self.apps['data']}, Query().type == "apps")
+        
+        del self.apps
