@@ -23,7 +23,7 @@ def get_all_apps():
                 continue
 
             # Skip blacklisted windows
-            if title.lower() in blacklist.window_blacklist.get(name.lower(), set()):
+            if title.lower() in blacklist.window_blacklist or title.lower() in blacklist.specific_window_blacklist.get(name.lower(), set()):
                 continue
 
             # Group all window titles under one app
