@@ -11,11 +11,13 @@ app_blacklist = {
     "systemhost.exe"
 }
 
-window_blacklist = {
-    "chrome legacy window"
+title_blacklist = {
+    "desktopwindowxamlsource",
+    "chrome legacy window",
+    "default ime"
 }
 
-specific_window_blacklist = {
+specific_title_blacklist = {
     "explorer.exe": {
         "running applications",
         "program manager"
