@@ -1,11 +1,18 @@
+import time
+
 import app_monitor
 import Include.metadatadb as metadata_db
+import Include.settings as settings
 
-app_data = app_monitor.get_all_apps()
 metadata = metadata_db.MetadataDB()
 
-metadata.load_app_data()
-for app_name, titles in app_data.items():
-    for title in titles:
-        metadata.update_app(app_name, title, 0, 0, 0)
-metadata.save_app_data()
+def handle_app_data():
+    active_app, active_title = app_monitor.get_active_app_title()
+    app_data = app_monitor.get_all_apps()
+
+    metadata.update_apps(app_data, active_app, active_title)
+
+while True:
+    handle_app_data()
+
+    time.sleep(settings.tick.total_seconds())
