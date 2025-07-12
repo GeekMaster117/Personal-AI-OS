@@ -8,7 +8,8 @@ app_blacklist = {
     "runtimebroker.exe",
     "startmenuexperiencehost.exe",
     "systemsettings.exe",
-    "systemhost.exe"
+    "systemhost.exe",
+    "searchhost.exe"
 }
 
 title_blacklist = {
