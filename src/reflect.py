@@ -88,7 +88,7 @@ def summarize_behavior():
         {"role": "system", "content": system_prompt},
         {"role": "assistant", "content": assistant_prompt},
         {"role": "user", "content": user_prompt}
-    ], stream=True):
+    ], options={"num_predict": 500}, stream=True):
         print(chunk['message']['content'], end='', flush=True)
 
 summarize_behavior()
