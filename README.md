@@ -1,10 +1,10 @@
-# Sentinel – Personal AI OS Daemon
+# Personal AI OS
 
-A modular, intelligent assistant that observes your digital behavior, reflects on it to provide insights and acts autonomously — all under your control.
+A modular, intelligent assistant that observes your digital behavior, reflects on it to provide insights, and acts autonomously — all under your control.
 
-# What is Sentinel?
+# What is AI OS?
 
-Sentinel is a local-first AI OS that runs quietly on your machine like a daemon. It watches your app usage, browser activity, GitHub commits, and engagement levels. Then, it reflects on these patterns to give you structured, intelligent suggestions — and can act on them via safe, user-approved automation.
+A local-first AI OS that runs quietly on your machine like a daemon. It watches your app usage, browser activity, GitHub commits, and engagement levels. Then, it reflects on these patterns to give you structured, intelligent suggestions — and can act on them via safe, user-approved automation.
 
 It's your personal AI assistant who never forgets, never judges, and always respects your autonomy.
 
@@ -36,7 +36,7 @@ Track how you spend time across your digital workspace.
 
 ### Reflect
 
-Suggest ways to improve routine, focus, work-life balance.
+Suggest ways to improve routine, focus, and work-life balance.
 
 <b> Routine Suggestions </b> – App habits, idle recovery
 
@@ -62,7 +62,7 @@ Execute useful actions within safe, structured boundaries.
 
 Sentinel runs locally. No cloud sync. No telemetry. You own your data.
 
-Future extensions may support optional encrypted syncing and plugin system.
+Future extensions may support optional encrypted syncing and a plugin system.
 
 # License
 
@@ -70,5 +70,5 @@ Future extensions may support optional encrypted syncing and plugin system.
 
 # Credits
 
-Built by someone who just wanted to understand himself — and got carried away by building an AI OS instead.
+Built by someone who just wanted to understand himself, and got carried away by building an AI OS instead.
 
