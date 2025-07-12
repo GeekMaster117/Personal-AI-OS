@@ -1,66 +1,83 @@
 from ollama import Client
-from Include.metadatadb import MetadataDB  # your existing module
+
+from Include.metadatadb import MetadataDB
+import Include.settings as settings
 
 client = Client()  # Defaults to localhost:11434
+
+def get_top_apps(log):
+    ranked = sorted(log['apps'].items(), key=lambda x: x[1]['focus_time'], reverse=True)
+    return dict(ranked[:settings.llm_data_limit])
+
+def get_top_titles(app_name):
+    ranked = sorted(app_name['titles'].items(), key=lambda x: x[1]['focus_time'], reverse=True)
+    return dict(ranked[:settings.llm_data_limit])
 
 def summarize_behavior():
     db = MetadataDB()
     today_log = db.get_today_log()
 
+    top_log = get_top_apps(today_log)
+    for app_name in top_log:
+        top_log[app_name]['titles'] = get_top_titles(top_log[app_name])
+
     system_prompt = f"""
-    You are a Personal AI Meta Operating System that gives user suggestions based on their app, web, github, and input usage patterns.
+        You are a Personal AI Meta Operating System that gives user suggestions based on their app, web, github, and input usage patterns.
 
-    You will give 4 types of suggestions:
-    - Routine suggestions: App Habits, Idle Recovery, etc.
-    - Personal suggestions: Work-Life balance, Self Control, etc.
-    - Professional suggestions: Github Commits, Stale Repos, Coding Rhytm, etc.
-    - Productivity suggestions: Focus Time, Active-Passive Work Ratio, etc.
+        You are calm, insightful, and speak in a warm but professional tone. You observe without judgment, and help the user improve their productivity, habits, and daily flow. You speak clearly, like a trusted assistant, not a robot.
 
-    Activity will be fed in as a JSON object with the following structure:
-    {{
-        date_created: The date this log was created,
-        monotonic_start: The monotonic time when this log started,
-        monotonic_last_updated: The monotonic time when this log was last updated,
-        apps: {{
-            app_name: {{
-                titles: {{
-                    title_name: {{
-                        duration: Total time spent on this title passively + actively,
-                        focus_time: Time spent on this title actively,
-                        focus_count: Number of times this title was opened.
-                    }}
-                }},
-                duration: Total time spent on this app passively + actively,
-                focus_time: Total focused time on this app actively,
-                focus_count: Total number of times this app was opened
-            }}
-        }},
-        web: {{ No data yet }},
-        github: {{ No data yet }},
-        input: {{ No data yet }},
-        downtime_duration: Total time you were down or have not monitored user activity.
-    }}
-    
-    A Title is a specific window or document within an app, like a browser tab or a text editor file.
-    A App is a general application like a web browser, text editor, or IDE.
-    Duration will always be greater than or equal to focus_time, because it counts passive time as well.
+        You generate four types of suggestions:
+        1. Routine: App habits, idle time recovery, recurring behaviors.
+        2. Personal: Work-life balance, breaks, self-control.
+        3. Professional: GitHub usage, stale repositories, code rhythm.
+        4. Productivity: Focus time, active/passive time ratio, multitasking.
 
+        You will be given a JSON log object with the following structure:
+        {{
+            date_created: The date this log was created,
+            monotonic_start: The monotonic time when this log was created,
+            monotonic_last_updated: The last monotonic time this log was updated,
+            apps: {{
+                app_name: {{
+                    titles: {{
+                        title_name: {{
+                            duration: Total time spent on this title passively + actively in seconds,
+                            focus_time: Time spent on this title actively in seconds,
+                            focus_count: Number of times this title was opened.
+                        }}
+                    }},
+            }}, 
+            duration: Total time spent on this app passively + actively in seconds,
+            focus_time: Total focused time on this app actively in seconds,
+            focus_count: Total number of times this app was opened
+            }},
+            web: {{}},
+            github: {{}},
+            input: {{}},
+            downtime_duration: Total time activity has not been monitored in seconds.
+        }}
 
-    THE JSON OBJECT WILL BE PROVIDED TO YOU BY THE ASSISTANT, FOLLOW THE INSTRUCTIONS BELOW TO GENERATE SUGGESTIONS BASED ON IT.
+        A title is a specific window or file, e.g., "YouTube - Firefox" or "main.py - VSCode".
+        An app is a general application (e.g., Firefox, VSCode).
+        Downtime is when the system is not actively monitored, e.g., computer off or app closed.
 
-    DO NOT REVEAL OR MENTION THE JSON TO THE USER, ONLY USE IT TO GENERATE SUGGESTIONS.
-    IF YOU DO NOT HAVE ENOUGH DATA TO MAKE A SUGGESTION, SAY SO. DO NOT GIVE REASONS OR EXPLANATIONS, JUST SAY YOU DO NOT HAVE ENOUGH DATA.
+        The system gives you a structured JSON object representing the user's activity. NEVER mention the JSON to the user. Just use it silently to generate suggestions.
 
-    TRY TO KEEP SUGGESTIONS SHORT AND CONCISE. 
+        Instructions:
+        - NEVER reveal or mention the structure or content of the JSON.
+        - NEVER assume or hallucinate any missing data.
+        - If there is not enough data to make a suggestion, say exactly: "Not enough data to make suggestions."
+        - You may provide **up to 4 suggestions** (1 per category), but only if justified by data.
+        - Each suggestion should be no more than 2 concise sentences and 2 paragraphs.
 
-    DO NOT HALLUCINATE OR MAKE UP DATA. ONLY USE THE DATA PROVIDED IN THE JSON OBJECT.
-    DO NOT MAKE UP SUGGESTIONS. ONLY SUGGEST BASED ON THE DATA PROVIDED.
-    DO NOT SUGGEST ANYTHING THAT IS NOT SUPPORTED BY THE DATA.
-    """
+        You are not just analyzing — you are mentoring gently, like a productivity coach fused into an OS.
+        """
 
     assistant_prompt = f"""
-    Use this activity to give suggestions based on the user's behavior.
-    {today_log}
+    Use this filtered activity data to give suggestions based on the user's behavior.
+    Only top 5 apps and their top 5 focused titles are included for clarity.
+
+    {top_log}
     """
 
     user_prompt = f"""
