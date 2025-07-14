@@ -2,6 +2,7 @@ import time
 import socket
 import subprocess
 import psutil
+import requests
 
 class HandleOllama:
     def __init__(self, ipv4="127.0.0.1", port=11434):
@@ -50,6 +51,28 @@ class HandleOllama:
         except Exception as e:
             print(f"Failed to start Ollama: {e}")
             return False
+        
+    def ensure_model(self, model_name):
+        try:
+            response = requests.get(f"http://{self.ipv4}:{self.port}/api/tags")
+            response.raise_for_status()
+            models = [m["name"] for m in response.json().get("models", [])]
+        
+            if model_name in models:
+                return True
+            else:
+                print(f"Model '{model_name}' not found. Pulling from Ollama...")
+                subprocess.run(["ollama", "pull", model_name], check=True)
+                print(f"Model '{model_name}' installed successfully.")
+                return True
+        except requests.exceptions.ConnectionError:
+            print("Ollama is not running. Please start ollama first.")
+        except subprocess.CalledProcessError:
+            print(f"Failed to pull model '{model_name}'.")
+        except Exception as e:
+            print(f"Unexpected error in ensure_model(): {e}")
+
+        return False
 
     def stop(self):
         if not self.is_running():

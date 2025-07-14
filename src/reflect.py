@@ -1,6 +1,7 @@
 from ollama import Client
 
 from Include.metadatadb import MetadataDB
+from Include.handle_ollama import HandleOllama
 import Include.settings as settings
 
 client = Client()  # Defaults to localhost:11434
@@ -14,6 +15,10 @@ def get_top_titles(app_name):
     return dict(ranked[:settings.llm_data_limit])
 
 def summarize_behavior():
+    ollama_handler = HandleOllama()
+    ollama_handler.start()
+    ollama_handler.ensure_model(settings.model_name)
+
     db = MetadataDB()
     today_log = db.get_today_log()
 
@@ -35,8 +40,8 @@ def summarize_behavior():
         You will be given a JSON log object with the following structure:
         {{
             date_created: The date this log was created,
-            monotonic_start: The monotonic time when this log was created,
-            monotonic_last_updated: The last monotonic time this log was updated,
+            monotonic_start: The monotonic time when this log was created in seconds,
+            monotonic_last_updated: The last monotonic time this log was updated in seconds,
             apps: {{
                 app_name: {{
                     titles: {{
@@ -60,6 +65,8 @@ def summarize_behavior():
         A title is a specific window or file, e.g., "YouTube - Firefox" or "main.py - VSCode".
         An app is a general application (e.g., Firefox, VSCode).
         Downtime is when the system is not actively monitored, e.g., computer off or app closed.
+        
+        Total duration monitored = monotonic_last_updated - monotonic_start.
 
         The system gives you a structured JSON object representing the user's activity. NEVER mention the JSON to the user. Just use it silently to generate suggestions.
 
@@ -90,5 +97,9 @@ def summarize_behavior():
         {"role": "user", "content": user_prompt}
     ], options={"num_predict": 500}, stream=True):
         print(chunk['message']['content'], end='', flush=True)
+    print()  # Ensure final output ends with a newline
+
+    ollama_handler.stop()
+    db.close()
 
 summarize_behavior()
