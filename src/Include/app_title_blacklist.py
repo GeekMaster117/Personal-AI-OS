@@ -1,4 +1,4 @@
-app_blacklist = {
+app_blacklist: set[str] = {
     "textinputhost.exe",
     "applicationframehost.exe",
     "dllhost.exe",
@@ -12,13 +12,13 @@ app_blacklist = {
     "searchhost.exe"
 }
 
-title_blacklist = {
+title_blacklist: set[str] = {
     "desktopwindowxamlsource",
     "chrome legacy window",
     "default ime"
 }
 
-specific_title_blacklist = {
+specific_title_blacklist: dict[str, set[str]] = {
     "explorer.exe": {
         "running applications",
         "program manager"

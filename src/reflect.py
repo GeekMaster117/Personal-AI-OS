@@ -6,15 +6,15 @@ import Include.settings as settings
 
 client = Client()  # Defaults to localhost:11434
 
-def only_top_apps(log):
+def only_top_apps(log: dict) -> None:
     ranked = sorted(log['apps'].items(), key=lambda x: x[1]['focus_time'], reverse=True)
     log['apps'] = dict(ranked[:settings.llm_data_limit])
 
-def only_top_titles(app_name):
+def only_top_titles(app_name: dict) -> None:
     ranked = sorted(app_name['titles'].items(), key=lambda x: x[1]['focus_time'], reverse=True)
     app_name['titles'] = dict(ranked[:settings.llm_data_limit])
 
-def get_system_prompt():
+def get_system_prompt() -> str:
     return f"""
         You are a Personal AI Meta Operating System that gives user suggestions based on their app, web, github, and input usage patterns.
 
@@ -91,7 +91,7 @@ def get_system_prompt():
         You are not just analyzing — you are mentoring gently, like a productivity coach fused into an OS.
     """
 
-def get_assistant_prompt():
+def get_assistant_prompt() -> str:
     db = MetadataDB()
     today_log = db.get_log()
     db.close()
@@ -110,34 +110,34 @@ def get_assistant_prompt():
         {today_log}
     """
 
-def get_user_prompt():
+def get_user_prompt() -> str:
     return input("User: ")
 
-def converse():
-    ollama_handler = HandleOllama()
+def converse() -> None:
+    ollama_handler: HandleOllama = HandleOllama()
     ollama_handler.start()
     ollama_handler.ensure_model(settings.model_name)
 
-    messages = [
+    messages: list[dict[str, str]] = [
         {"role": "system", "content": get_system_prompt()},
-        {"role": "assistant", "content": get_assistant_prompt()}
+        {"role": "assistant", "content": get_assistant_prompt()},
+        {"role": "user", "content": ""}
     ]
 
     while True:
-        user_input = get_user_prompt()
+        user_input: str = get_user_prompt()
         if user_input.lower() in ['exit', 'quit', 'stop']:
             print("Exiting conversation.")
             break
-
-        messages.append({"role": "user", "content": user_input})
+        
+        messages[-1]["content"] = user_input
         
         print("LLM: ", end='')
-        response = ''
+        response: str = ''
         for chunk in client.chat(model="phi3:mini", messages=messages, options={"num_predict": 300}, stream=True):
-            token = chunk['message']['content']
+            token: str = chunk['message']['content']
             print(token, end='', flush=True)
             response += token
-        messages.append({"role": "assistant", "content": response})
 
         print("\n-----------------------------------------------------------------")
 

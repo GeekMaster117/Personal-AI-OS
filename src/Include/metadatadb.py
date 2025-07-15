@@ -13,9 +13,9 @@ class MetadataDB:
         self.db_path: Path = metadata_dir / "metadata.json"
         self.db: TinyDB = TinyDB(self.db_path)
 
-        self.apps_open: dict = dict()
-        self.active_app: str = None
-        self.active_title: str = None
+        self.apps_open: dict[str, set[str]] = dict()
+        self.active_app: str | None = None
+        self.active_title: str | None = None
 
         self._ensure_today_log()
 
@@ -49,7 +49,7 @@ class MetadataDB:
         elapsed_mono: float = monotonic_time - monotonic_start
         return (datetime.fromisoformat(datetime_compare) + timedelta(seconds=elapsed_mono)).time()
 
-    def update_apps(self, all_apps: dict, active_app: str = None, active_title: str = None) -> None:
+    def update_apps(self, all_apps: dict[str, set[str]], active_app: str | None = None, active_title: str | None = None) -> None:
         self._ensure_today_log()  # Re-check in case day rolled over or time zone changed
 
         doc_id: int = max(doc.doc_id for doc in self.db.all())
