@@ -22,7 +22,7 @@ class HandleOllama:
                 for conn in proc.net_connections(kind="inet"):
                     if conn.laddr.port == port:
                         proc.kill()
-                    return True
+                        return True
             except Exception:
                 continue
         return False
