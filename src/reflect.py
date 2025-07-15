@@ -93,7 +93,7 @@ def get_system_prompt():
 
 def get_assistant_prompt():
     db = MetadataDB()
-    today_log = db.get_today_log()
+    today_log = db.get_log()
     db.close()
 
     only_top_apps(today_log)
