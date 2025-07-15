@@ -79,14 +79,47 @@ class MetadataDB:
         now = time.monotonic()
         current_hour = str(self._convert_mono_to_time(today_log["monotonic_start"], today_log["time_created"], now).hour)
 
-        if now - today_log["monotonic_last_updated"] > settings.downtime_buffer.total_seconds():
+        downtime = now - today_log["monotonic_last_updated"]
+        if downtime > settings.downtime_buffer.total_seconds():
+            today_log["total_downtime_duration"] += downtime
+
+            last_update_timestamp = self._convert_mono_to_time(today_log["monotonic_start"], today_log["time_created"], today_log["monotonic_last_updated"])
+            last_update_hour = last_update_timestamp.hour
+
+            blackout_hours = (int(current_hour) - last_update_hour) % 24
+            while blackout_hours > 1:
+                blackout_hour = str((last_update_hour + blackout_hours - 1) % 24)
+                if blackout_hour not in today_log["downtime_periods"]:
+                    today_log["downtime_periods"][blackout_hour] = {
+                        "duration": 0
+                    }
+                today_log["downtime_periods"][blackout_hour]["duration"] = 3600
+
+                downtime -= 3600
+                blackout_hours -= 1
+
+            downtime = max(0, downtime)
+
+            if blackout_hours == 1:
+                last_update_hour = str(last_update_hour)
+
+                if last_update_hour not in today_log["downtime_periods"]:
+                    today_log["downtime_periods"][last_update_hour] = {
+                        "duration": 0
+                    }
+
+                last_update_hour_downtime = 3600 - (last_update_timestamp.minute * 60 + last_update_timestamp.second)
+                today_log["downtime_periods"][last_update_hour]["duration"] += last_update_hour_downtime
+
+                downtime -= last_update_hour_downtime
+
+            downtime = max(0, downtime)
+
             if current_hour not in today_log["downtime_periods"]:
                 today_log["downtime_periods"][current_hour] = {
                     "duration": 0
                 }
-
-            today_log["downtime_periods"][current_hour]["duration"] += now - today_log["monotonic_last_updated"]
-            today_log["total_downtime_duration"] += now - today_log["monotonic_last_updated"]
+            today_log["downtime_periods"][current_hour]["duration"] += downtime
 
             self.apps_open.clear()
             self.apps_open.update(all_apps)
