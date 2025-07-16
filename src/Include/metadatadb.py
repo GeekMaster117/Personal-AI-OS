@@ -17,7 +17,11 @@ class MetadataDB:
         self.active_app: str | None = None
         self.active_title: str | None = None
 
+        self._ensure_log_integrity()
+
+    def _ensure_log_integrity(self) -> None:
         self._ensure_today_log()
+        self._ensure_max_logs()
 
     def _ensure_today_log(self) -> None:
         datetime_today: datetime = datetime.today()
@@ -45,12 +49,18 @@ class MetadataDB:
 
         self.db.insert(new_day)
 
+    def _ensure_max_logs(self) -> None:
+        doc_ids: list[int] = sorted([doc.doc_id for doc in self.db.all()])
+        if len(doc_ids) > settings.max_logs:
+            excess_count: int = len(doc_ids) - settings.max_logs
+            self.db.remove(doc_ids=doc_ids[:excess_count])
+
     def _convert_mono_to_time(self, monotonic_start: float, datetime_compare: str, monotonic_time: float) -> datetime.time:
         elapsed_mono: float = monotonic_time - monotonic_start
         return (datetime.fromisoformat(datetime_compare) + timedelta(seconds=elapsed_mono)).time()
 
     def update_apps(self, all_apps: dict[str, set[str]], active_app: str | None = None, active_title: str | None = None) -> None:
-        self._ensure_today_log()  # Re-check in case day rolled over or time zone changed
+        self._ensure_log_integrity()
 
         doc_id: int = max(doc.doc_id for doc in self.db.all())
         today_log: dict = self.db.get(doc_id=doc_id)
@@ -193,7 +203,7 @@ class MetadataDB:
         return len(self.db.all())
 
     def get_log(self, prev_day: int = 0) -> dict:
-        self._ensure_today_log()
+        self._ensure_log_integrity()
 
         if prev_day < 0:
             raise ValueError("prev_day must be a non-negative integer")
