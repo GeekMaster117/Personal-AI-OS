@@ -200,6 +200,8 @@ class MetadataDB:
         self.db.update(today_log, doc_ids=[doc_id])
 
     def get_log_count(self) -> int:
+        self._ensure_log_integrity()
+
         return len(self.db.all())
 
     def get_log(self, prev_day: int = 0) -> dict:
