@@ -44,7 +44,8 @@ class MetadataDB:
             "github": {},
             "input": {},
             "downtime_periods": {},
-            "total_downtime_duration": 0
+            "total_downtime_duration": 0,
+            "total_anomalies": 0
         }
 
         self.db.insert(new_day)
@@ -87,10 +88,29 @@ class MetadataDB:
                     }
 
         now: float = time.monotonic()
+        now_datetime: datetime = datetime.today()
         current_hour: str = str(self._convert_mono_to_time(today_log["monotonic_start"], today_log["time_created"], now).hour)
 
+        datetime_shift: timedelta = now_datetime - datetime.fromisoformat(today_log["time_created"])
+        monotime_shift: float = now - today_log["monotonic_start"]
+        if abs(datetime_shift.total_seconds() - monotime_shift) > settings.time_threshold.total_seconds():
+            today_log["time_created"] = now_datetime.isoformat()
+            today_log["monotonic_start"] = now
+            today_log["monotonic_last_updated"] = now
+
+            today_log["total_anomalies"] += 1
+
+            self.apps_open.clear()
+            self.apps_open.update(all_apps)
+
+            if active_app and active_title:
+                self.active_app: str = active_app
+                self.active_title: str = active_title
+
+            return
+
         downtime: float = now - today_log["monotonic_last_updated"]
-        if downtime > settings.downtime_buffer.total_seconds():
+        if downtime > settings.time_threshold.total_seconds():
             today_log["total_downtime_duration"] += downtime
 
             last_update_timestamp: datetime.time = self._convert_mono_to_time(today_log["monotonic_start"], today_log["time_created"], today_log["monotonic_last_updated"])
@@ -216,4 +236,6 @@ class MetadataDB:
         return self.db.get(doc_id=doc_ids[-prev_day])
 
     def close(self):
+        self._ensure_log_integrity()
+
         self.db.close()
