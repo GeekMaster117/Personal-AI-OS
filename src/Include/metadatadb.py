@@ -30,14 +30,14 @@ class MetadataDB:
 
         doc_id: int = max([doc.doc_id for doc in self.db.all()], default=0)
         latest_day: dict = self.db.get(doc_id=doc_id)
-        if latest_day and datetime.fromisoformat(latest_day["time_created"]).date() == current_date:
+        if latest_day and datetime.fromisoformat(latest_day["time_anchor"]).date() == current_date:
             return
 
         # Append new day entry
         now_monotonic: float = time.monotonic()
         new_day: dict = {
-            "time_created": today,
-            "monotonic_start": now_monotonic,
+            "time_anchor": today,
+            "monotonic_anchor": now_monotonic,
             "monotonic_last_updated": now_monotonic,
             "apps": {},
             "web": {},
@@ -56,8 +56,8 @@ class MetadataDB:
             excess_count: int = len(doc_ids) - settings.max_logs
             self.db.remove(doc_ids=doc_ids[:excess_count])
 
-    def _convert_mono_to_time(self, monotonic_start: float, datetime_compare: str, monotonic_time: float) -> datetime.time:
-        elapsed_mono: float = monotonic_time - monotonic_start
+    def _convert_mono_to_time(self, monotonic_anchor: float, datetime_compare: str, monotonic_time: float) -> datetime.time:
+        elapsed_mono: float = monotonic_time - monotonic_anchor
         return (datetime.fromisoformat(datetime_compare) + timedelta(seconds=elapsed_mono)).time()
 
     def update_apps(self, all_apps: dict[str, set[str]], active_app: str | None = None, active_title: str | None = None) -> None:
@@ -86,16 +86,33 @@ class MetadataDB:
                         "focus_time": 0,
                         "focus_count": 0
                     }
+        
+        if active_app and active_title:
+            if active_app not in apps_log:
+                apps_log[active_app] = {
+                    "titles": {},
+                    "total_duration": 0,
+                    "focus_periods": {},
+                    "focus_time": 0,
+                    "focus_count": 0
+                }
+            if active_title not in apps_log[active_app]["titles"]:
+                apps_log[active_app]["titles"][active_title] = {
+                    "total_duration": 0,
+                    "focus_periods": {},
+                    "focus_time": 0,
+                    "focus_count": 0
+                }
 
         now: float = time.monotonic()
         now_datetime: datetime = datetime.today()
-        current_hour: str = str(self._convert_mono_to_time(today_log["monotonic_start"], today_log["time_created"], now).hour)
+        current_hour: str = str(self._convert_mono_to_time(today_log["monotonic_anchor"], today_log["time_anchor"], now).hour)
 
-        datetime_shift: timedelta = now_datetime - datetime.fromisoformat(today_log["time_created"])
-        monotime_shift: float = now - today_log["monotonic_start"]
+        datetime_shift: timedelta = now_datetime - datetime.fromisoformat(today_log["time_anchor"])
+        monotime_shift: float = now - today_log["monotonic_anchor"]
         if abs(datetime_shift.total_seconds() - monotime_shift) > settings.time_threshold.total_seconds():
-            today_log["time_created"] = now_datetime.isoformat()
-            today_log["monotonic_start"] = now
+            today_log["time_anchor"] = now_datetime.isoformat()
+            today_log["monotonic_anchor"] = now
             today_log["monotonic_last_updated"] = now
 
             today_log["total_anomalies"] += 1
@@ -113,7 +130,7 @@ class MetadataDB:
         if downtime > settings.time_threshold.total_seconds():
             today_log["total_downtime_duration"] += downtime
 
-            last_update_timestamp: datetime.time = self._convert_mono_to_time(today_log["monotonic_start"], today_log["time_created"], today_log["monotonic_last_updated"])
+            last_update_timestamp: datetime.time = self._convert_mono_to_time(today_log["monotonic_anchor"], today_log["time_anchor"], today_log["monotonic_last_updated"])
             last_update_hour: int = last_update_timestamp.hour
 
             blackout_hours: int = (int(current_hour) - last_update_hour) % 24
@@ -168,7 +185,7 @@ class MetadataDB:
         
         # Update focus time and count for active app and title
         if active_app and active_title:
-            if current_hour not in apps_log[active_app]["focus_periods"]:
+            if active_app in apps_log and current_hour not in apps_log[active_app]["focus_periods"]:
                 apps_log[active_app]["focus_periods"][current_hour] = {
                     "focus_time": 0,
                     "focus_count": 0
@@ -223,17 +240,25 @@ class MetadataDB:
         self._ensure_log_integrity()
 
         return len(self.db.all())
-
-    def get_log(self, prev_day: int = 0) -> dict:
+    
+    def get_document_ids(self) -> list[int]:
         self._ensure_log_integrity()
 
-        if prev_day < 0:
-            raise ValueError("prev_day must be a non-negative integer")
-        if prev_day >= self.get_log_count():
-            raise ValueError("prev_day exceeds the number of available logs")
+        return [doc.doc_id for doc in self.db.all()]
 
-        doc_ids = sorted([doc.doc_id for doc in self.db.all()])
-        return self.db.get(doc_id=doc_ids[-prev_day])
+    def get_recent_log(self) -> dict:
+        self._ensure_log_integrity()
+
+        doc_ids = max([doc.doc_id for doc in self.db.all()])
+        return self.db.get(doc_id=doc_ids[-1])
+
+    def get_log(self, doc_id: int) -> dict:
+        self._ensure_log_integrity()
+
+        if doc_id < 0 or doc_id > max([doc.doc_id for doc in self.db.all()]):
+            raise ValueError("doc_id is out of range")
+
+        return self.db.get(doc_id=doc_id)
 
     def close(self):
         self._ensure_log_integrity()
