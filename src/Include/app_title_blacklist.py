@@ -15,7 +15,11 @@ app_blacklist: set[str] = {
 title_blacklist: set[str] = {
     "desktopwindowxamlsource",
     "chrome legacy window",
-    "default ime"
+    "default ime",
+    "popuphost"
+    "ok",
+    "cancel",
+    "ok, don't show again"
 }
 
 specific_title_blacklist: dict[str, set[str]] = {
