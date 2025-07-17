@@ -2,3 +2,4 @@ psutil
 pywinctl
 requests
 TinyDB
+nvidia-ml-py3
