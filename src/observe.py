@@ -1,8 +1,8 @@
 import time
 
-import Include.app_monitor as app_monitor
-import Include.metadatadb as metadata_db
-import Include.settings as settings
+import Include.core.app_monitor as app_monitor
+import Include.core.metadatadb as metadata_db
+import Include.core.settings as settings
 
 metadata = metadata_db.MetadataDB()
 

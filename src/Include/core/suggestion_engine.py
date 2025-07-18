@@ -4,18 +4,18 @@ import queue
 from datetime import datetime
 import textwrap
 
-from Include.metadatadb import MetadataDB
-import Include.settings as settings
+from Include.core.metadatadb import MetadataDB
+import Include.core.settings as settings
 
 class SuggestionEngine:
     def __init__(self, db_handler: MetadataDB):
         self.db_handler = db_handler
         self.processed_logs = queue.Queue()
 
-        if self.db_handler.get_log_count() >= 1:
+        if self.db_handler.get_log_count() > 1:
             doc_ids = sorted(self.db_handler.get_document_ids())
 
-            for i in range(len(doc_ids)):
+            for i in range(len(doc_ids) - 1):
                 threading.Thread(
                     target=self._process_log,
                     args=(doc_ids[i],)

@@ -3,7 +3,7 @@ from pathlib import Path
 import time
 from tinydb import TinyDB, Query
 
-import Include.settings as settings
+import Include.core.settings as settings
 
 metadata_dir: Path = Path(Path(__file__) / "../../metadata/").resolve()
 
