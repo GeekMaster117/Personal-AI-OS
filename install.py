@@ -72,12 +72,13 @@ if __name__ == "__main__":
                 continue
             
             install_package(package)
+            
     with open("requirements/model-requirements.txt", "r") as file:
         for line in file:
             MODEL_URL = line.strip()
             if not MODEL_URL:
                 continue
 
-            DEST_PATH = "src/models/" + MODEL_URL.split("/")[-1]
-            os.makedirs("src/models", exist_ok=True)
+            DEST_PATH = "src/Include/models/" + MODEL_URL.split("/")[-1]
+            os.makedirs("src/Includemodels", exist_ok=True)
             download_model(MODEL_URL, DEST_PATH)
