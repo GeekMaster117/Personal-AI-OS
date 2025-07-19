@@ -86,6 +86,6 @@ class SuggestionEngine:
 
         self.processed_logs.put(summary)
 
-db_handler = MetadataDB()
+db_handler = MetadataDB(settings.metadata_dir)
 suggestion_engine = SuggestionEngine(db_handler)
 print(suggestion_engine.processed_logs.get())

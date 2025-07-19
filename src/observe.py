@@ -5,8 +5,7 @@ import Include.core.app_monitor as app_monitor
 import Include.core.metadatadb as metadata_db
 import Include.core.settings as settings
 
-metadata_dir: Path = Path(__file__).resolve().parent / "metadata"
-metadata = metadata_db.MetadataDB(metadata_dir)
+metadata = metadata_db.MetadataDB(settings.metadata_dir)
 
 def handle_app_data() -> None:
     active_app_title: tuple[str, str] | None = app_monitor.get_active_app_title()
