@@ -212,3 +212,5 @@ pyvenv.cfg
 metadata/
 dev/
 models/
+
+.vscode/
