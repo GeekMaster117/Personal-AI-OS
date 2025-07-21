@@ -51,6 +51,6 @@ if __name__ == "__main__":
             if not MODEL_URL:
                 continue
 
-            DEST_PATH = "src/Include/models/" + MODEL_URL.split("/")[-1]
-            os.makedirs("src/Includemodels", exist_ok=True)
+            DEST_PATH = "models/" + MODEL_URL.split("/")[-1]
+            os.makedirs("models/", exist_ok=True)
             download_model(MODEL_URL, DEST_PATH)
