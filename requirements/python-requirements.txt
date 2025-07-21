@@ -1,5 +1,0 @@
-psutil
-pywinctl
-requests
-TinyDB
-pycuda
