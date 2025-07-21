@@ -3,7 +3,7 @@ from pathlib import Path
 
 import Include.core.app_monitor as app_monitor
 import Include.core.metadatadb as metadata_db
-import Include.core.settings as settings
+import settings as settings
 
 metadata = metadata_db.MetadataDB(settings.metadata_dir)
 

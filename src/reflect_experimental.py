@@ -2,7 +2,7 @@ from ollama import Client
 
 from Include.core.metadatadb import MetadataDB
 from Include.other.handle_ollama_experimental import HandleOllama
-import Include.core.settings as settings
+import settings as settings
 
 client = Client()  # Defaults to localhost:11434
 

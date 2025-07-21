@@ -3,7 +3,7 @@ from pathlib import Path
 import time
 from tinydb import TinyDB
 
-import Include.core.settings as settings
+import settings
 
 class MetadataDB:
     def __init__(self, metadata_dir: Path):

@@ -5,7 +5,7 @@ from datetime import datetime
 import textwrap
 
 from Include.core.metadatadb import MetadataDB
-import Include.core.settings as settings
+import settings
 
 class SuggestionEngine:
     def __init__(self, db_handler: MetadataDB):
