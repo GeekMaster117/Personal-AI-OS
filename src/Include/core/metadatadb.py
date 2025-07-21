@@ -6,7 +6,8 @@ from tinydb import TinyDB
 import settings
 
 class MetadataDB:
-    def __init__(self, metadata_dir: Path):
+    def __init__(self, metadata_dir: str):
+        metadata_dir = Path(metadata_dir)
         metadata_dir.mkdir(parents=True, exist_ok=True)
 
         self.db_path: Path = metadata_dir / "metadata.json"
