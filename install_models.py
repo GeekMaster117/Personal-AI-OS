@@ -6,7 +6,12 @@ import time
 def download_model(url: str, dest_path: str, retries: int = 3, timeout: int = 30):
     if os.path.exists(dest_path):
         print(f"Model already exists at {dest_path}\n")
-        return
+        answer = input("Would you like to reinstall? (Y/N): ").lower()
+        if answer == 'n':
+            return
+        elif answer != 'y':
+            print('Received a different answer then (Y/N), skipping reinstalltion')
+            return
 
     print("Downloading model from:", url)
 
