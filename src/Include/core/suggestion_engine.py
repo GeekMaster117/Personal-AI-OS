@@ -16,10 +16,7 @@ class SuggestionEngine:
             doc_ids = sorted(self.db_handler.get_document_ids())
 
             for i in range(len(doc_ids) - 1):
-                threading.Thread(
-                    target=self._process_log,
-                    args=(doc_ids[i],)
-                ).start()
+                self._process_log(doc_ids[i])
 
     def _score(self, app_or_title: dict) -> float:
         weight1 = 0.2
@@ -85,7 +82,3 @@ class SuggestionEngine:
                 """)
 
         self.processed_logs.put(summary)
-
-db_handler = MetadataDB(settings.metadata_dir)
-suggestion_engine = SuggestionEngine(db_handler)
-print(suggestion_engine.processed_logs.get())
