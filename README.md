@@ -1,74 +1,60 @@
 # Personal AI OS
 
-A modular, intelligent assistant that observes your digital behavior, reflects on it to provide insights, and acts autonomously — all under your control.
+An AI Meta Operating System, which monitors your data, gives suggestions based on data, and builds automations based on suggestions.
 
-# What is AI OS?
+## Core Philosophy
 
-A local-first AI OS that runs quietly on your machine like a daemon. It watches your app usage, browser activity, GitHub commits, and engagement levels. Then, it reflects on these patterns to give you structured, intelligent suggestions — and can act on them via safe, user-approved automation.
+- Completely Offline, but still intelligent.
 
-It's your personal AI assistant who never forgets, never judges, and always respects your autonomy.
+- Autonomous, but predictable.
 
-# Core Philosophy
-
-Autonomous, but never out of control
-
-Reflective, not intrusive
-
-Modular, extensible, and hackable
-
-Offline-first, private by default
-
-# Architecture
+## Architecture
 
 Sentinel works in three stages, each with modular subsystems:
 
 ### Observe
 
-Track how you spend time across your digital workspace.
+Track how you spend time across your computer.
 
-<b> App Monitor </b> – App name, window title, focus time, duration
+- **App Monitor** – Tracks your app activity
 
-<b> Browser Monitor </b> – Websites visited, tab titles, time spent
+- **Browser Monitor** – Tracks your web activity
 
-<b> Github Monitor </b> – Repo activity, commits, coding patterns
+- **Github Monitor** – Tracks you code activity
 
-<b> Input Monitor </b> – Keyboard, mouse, idle detection
+- **Input Monitor** – Tracks your peripheral activity
 
 ### Reflect
 
-Suggest ways to improve routine, focus, and work-life balance.
+Suggest ways to improve routine, personal and professional life along with productivity insights.
 
-<b> Routine Suggestions </b> – App habits, idle recovery
+- **Routine Suggestions** – Suggestions on things you do often with a hidden or visible pattern.
 
-<b> Professional Suggestions </b> – GitHub rhythm, stale projects
+- **Professional Suggestions** – Suggestions on improving professional life.
 
-<b> Productivity Suggestions </b> – Focus blocks, work hours
+- **Productivity Suggestions** – Suggestions on improving your productivity.
 
-<b> Personal Suggestions </b> – Work-life balance, self-awareness
+- **Personal Suggestions** – Suggestions on improving your personal life.
 
 ### Act
 
-Execute useful actions within safe, structured boundaries.
+Build automations to improve personal, professional life and improve productivity by automating routines.
 
-<b> Intent Parser </b> – Accepts LLM-generated suggestions
+- **Suggestion-based automation** - Built by LLM automatically based on the suggestions.
 
-<b> Automation Builder </b> – Builds structured trigger objects
+- **Manual automation** - Built by user manually.
 
-# System Diagram
+## System Diagram
 
 ![image](https://github.com/user-attachments/assets/bab6660a-d8b3-452a-8055-88e2a008c7ce)
 
-# Privacy and Ethics
+## Privacy and Ethics
 
-Sentinel runs locally. No cloud sync. No telemetry. You own your data.
+- It runs locally. You own your data.
 
-Future extensions may support optional encrypted syncing and a plugin system.
+- You can choose to delete your data at any time.
 
-# License
+---
 
-<b> MIT </b> – Feel free to use, fork, and build on it.
-
-# Credits
-
-Built by someone who just wanted to understand himself, and got carried away by building an AI OS instead.
+Built by someone who just wanted to understand himself, and got carried away by building an AI OS instead. No cap.
 
