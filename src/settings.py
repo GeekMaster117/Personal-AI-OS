@@ -6,10 +6,11 @@ time_threshold: timedelta = timedelta(minutes=3)
 
 metadata_dir: str = "metadata"
 cuda_dir: str = "bin"
+sys_cache_dir: str = cuda_dir + "/sys_cache.bin"
 
 model_dir: str = "models/Phi-3-mini-4k-instruct-q4.gguf"
-total_model_layers = 32
-model_window_size = 4096
+total_model_layers: int = 32
+model_window_size: int = 4096
 
 experimental_model_name: str = "phi3:mini"
 
