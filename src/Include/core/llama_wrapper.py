@@ -8,6 +8,8 @@ import itertools
 import textwrap
 import ctypes
 from llama_cpp import Llama
+from io import StringIO
+from contextlib import redirect_stderr
 
 from Include.core.suggestion_engine import SuggestionEngine
 from Include.core.metadatadb import MetadataDB
@@ -17,14 +19,30 @@ import settings
 class LlamaCPP:
     def __init__(self):
         self.supported_arch = self._get_supported_arch()
-
         self.best_gpu_info = self._get_gpu_info()
-
         cuda_library = self._get_cuda_library(self.best_gpu_info['arch'])
+
+        db_handler = MetadataDB(settings.metadata_dir)
+        self.suggestion_engine = SuggestionEngine(db_handler)
+
         if cuda_library:
             ctypes.CDLL(cuda_library)
 
-            llm = Llama(
+            self.llm = self._load_llm_quietly()
+
+            while True:
+                user_input = input("You: ")
+                if user_input.lower() in ['exit', 'quit', 'stop']:
+                    print("Exiting conversation.")
+                    break
+
+                self._handle_chat(user_input)
+        else:
+            print("Skipping GPU acceleration...")
+
+    def _load_llm_quietly(self) -> Llama:
+        with redirect_stderr(StringIO()):
+            return Llama(
                 model_path = settings.model_dir,
                 main_gpu = self.best_gpu_info['idx'],
                 n_ctx = settings.model_window_size,
@@ -33,45 +51,6 @@ class LlamaCPP:
                 n_batch = self.best_gpu_info['batch_size'],
                 verbose = False
             )
-
-            db_handler = MetadataDB(settings.metadata_dir)
-            suggestion_engine = SuggestionEngine(db_handler)
-
-            messages = [
-                {"role": "system", "content": self._get_system_prompt()},
-                {"role": "assistant", "content": self._get_assistant_prompt(suggestion_engine.processed_logs.get())},
-                {"role": "user", "content": ""}
-            ]
-
-            while True:
-                user_input = input("You: ")
-                if user_input.lower() in ['exit', 'quit', 'stop']:
-                    print("Exiting conversation.")
-                    break
-
-                messages[-1]["content"] = user_input
-
-                spinner_flag = {'running': True}
-                spinner_thread = threading.Thread(
-                    target = self._loading_spinner,
-                    args = ("Thinking", spinner_flag,)
-                )
-                spinner_thread.start()
-
-                first_chunk = True
-                for chunk in llm.create_chat_completion(messages=messages, stream=True):
-                    if first_chunk:
-                        spinner_flag['running'] = False
-                        spinner_thread.join()
-                        first_chunk = False
-                        print("LLM: ", end='', flush=True)
-
-                    delta = chunk["choices"][0]["delta"]
-                    content = delta.get("content", "")
-                    print(content, end='', flush=True)
-                print("\n")
-        else:
-            print("Skipping GPU acceleration...")
 
     def _get_gpu_info(self) -> list[int] | None:
         try:
@@ -286,10 +265,10 @@ class LlamaCPP:
             You are not just analyzing — you are mentoring gently, like a productivity coach fused into an OS.
         """)
     
-    def _get_assistant_prompt(self, data) -> str:
+    def _get_assistant_prompt(self) -> str:
         return textwrap.dedent(f"""
-            Use this data to provide suggestions:
-            {data}
+            Use this data to generate suggestions
+            {self.suggestion_engine.processed_logs.get()}
         """)
 
     def _loading_spinner(self, loading_message, flag):
@@ -300,5 +279,32 @@ class LlamaCPP:
             time.sleep(0.1)
         sys.stdout.write('\r \r')
         sys.stdout.flush()
+
+    def _handle_chat(self, user_prompt: str) -> None:
+        messages = [
+            {"role": "system", "content": self._get_system_prompt()},
+            {"role": "assistant", "content": self._get_assistant_prompt()},
+            {"role": "user", "content": user_prompt}
+        ]
+
+        spinner_flag = {'running': True}
+        spinner_thread = threading.Thread(
+            target = self._loading_spinner,
+            args = ("Thinking", spinner_flag,)
+        )
+        spinner_thread.start()
+
+        first_chunk = True
+        for chunk in self.llm.create_chat_completion(messages=messages, temperature=0.7, top_p=0.9, stream=True):
+            if first_chunk:
+                spinner_flag['running'] = False
+                spinner_thread.join()
+                first_chunk = False
+                print("LLM: ", end='', flush=True)
+
+            delta = chunk["choices"][0]["delta"]
+            content = delta.get("content", "")
+            print(content, end='', flush=True)
+        print("\n")
 
 test = LlamaCPP()
