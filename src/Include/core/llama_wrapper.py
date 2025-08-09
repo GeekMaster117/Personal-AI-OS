@@ -2,6 +2,7 @@ import pycuda.autoinit
 import pycuda.driver as cuda
 import ctypes
 import os
+import psutil
 
 import settings
 
@@ -44,94 +45,141 @@ def get_cores_per_sm(arch: int) -> int | None:
 
     return core_sm_map[arch]
 
+def get_optimal_batchsize(free_memory, total_layers, gpu_layers, layer_size, kv_cache, activations_token, compute_batch_size) -> dict[str, float | int]:
+    # VRAM used by layers = (No.of Layers * Size of each Layer) + KV cache per Layer
+
+    vram_layers = (gpu_layers * layer_size) + kv_cache
+    vram_left = free_memory - vram_layers
+
+    #Returns negative infinite score when no free VRAM left
+
+    if vram_left <= 0:
+        return {'score': -float('inf'), 'batch_size': 0}
+
+    #Batch size decided by memory = VRAM used by layers / activation per token
+
+    vram_max_batch_size = vram_left / activations_token
+
+    #Since we don't want to occupy entire GPU VRAM, we discount it by 20%
+
+    vram_batch_size = int(vram_max_batch_size * 0.8)
+
+    batch_size = min(vram_batch_size, compute_batch_size)
+
+    #Score = throughput - ((total layers - layers) * weight), where weight is preference of layers over batch size.
+
+    throughput_score = batch_size
+    latency_penalty = (total_layers - gpu_layers) * settings.layer_batchsize_weight
+    score = throughput_score - latency_penalty
+    
+    config = {
+        'score': score,
+        'layers': gpu_layers,
+        'batch_size': batch_size
+    }
+
+    print(config)
+
+    return config
+
 def get_gpu_info() -> list[int] | None:
     try:
-        best_gpu_info = dict()
+        best_device_info: dict | None = None
         for idx in range(cuda.Device.count()):
             device = cuda.Device(idx)
             context = device.make_context()
             free_mem, total_mem = cuda.mem_get_info()
             context.pop()
 
-            if best_gpu_info:
-                if (best_gpu_info['free_mem'] < free_mem) or (best_gpu_info['free_mem'] == free_mem and best_gpu_info['total_mem'] < total_mem):
-                    best_gpu_info = {
+            if best_device_info:
+                if (best_device_info['free_mem'] < free_mem) or (best_device_info['free_mem'] == free_mem and best_device_info['total_mem'] < total_mem):
+                    best_device_info = {
                         'idx': idx,
                         'free_mem': free_mem,
                         'total_mem': total_mem
                     }
             else:
-                best_gpu_info = {
+                best_device_info = {
                     'idx': idx,
                     'free_mem': free_mem,
                     'total_mem': total_mem
                 }
 
-        if not best_gpu_info:
-            return
-            
-        device = cuda.Device(best_gpu_info['idx'])
-        compute_capability = device.compute_capability()
-        arch = (compute_capability[0] * 10) + compute_capability[1]
-        best_gpu_info['arch'] = arch
+        if not best_device_info:
+            memory = psutil.virtual_memory()
+            best_device_info = {
+                'idx': -1,
+                'free_mem': memory.free / (1024 ** 2),
+                'total_mem': memory.total / (1024 ** 2)
+            }
+        
+        if best_device_info['idx'] == -1:
+            best_device_info['arch'] = 'cpu'
+            return best_device_info
+        else:
+            device = cuda.Device(best_device_info['idx'])
+            compute_capability = device.compute_capability()
+            arch = (compute_capability[0] * 10) + compute_capability[1]
+            best_device_info['arch'] = arch
 
         #Total VRAM used = gpu_layers * [(total_layers / model_size) + (window_size * KV cache per token per layer) + (batch_size * activations_per_token)]
         #All the calculations below happen in MB
 
-        gpu_layers = settings.total_model_layers #Since layers are only 32, we can load them all
-        best_gpu_info['gpu_layers'] = gpu_layers
-
         model_size = os.path.getsize(settings.model_dir) / (1024 ** 2)
-        size_layer = settings.total_model_layers / model_size
+        layer_size = settings.total_model_layers / model_size
 
         kvcache_token_layer = 0.0009765625 #Rule of thumb is 1KB of kv cache per token per layer in float16
         total_kvcache = settings.model_window_size * kvcache_token_layer
 
         activations_token = 0.00390625 #Rule of thumb is 4KB of activations per token in float16
 
-        #Above equation can be written as
-        #batch size = ((Free VRAM / gpu_layers) - size per layer - total kv cache) / activation per token
-
-        batch_size = ((best_gpu_info['free_mem'] / gpu_layers) - size_layer - total_kvcache) / activations_token
-
-        #Since we don't want to occupy entire GPU VRAM, we discount it by 20%
-            
-        max_batch_size = int(batch_size * 0.8)
-
-        #Less powerful GPU cannot handle large batch size.
-        #So we may need to decrease batch size even lower
         #Theoretical GPU capability in GFLOPS = cuda cores * clock rate in GHz * 2
 
-        cores_sm = get_cores_per_sm(best_gpu_info['arch'])
+        cores_sm = get_cores_per_sm(best_device_info['arch'])
         if not cores_sm:
             return
         sm_count = device.get_attribute(cuda.device_attribute.MULTIPROCESSOR_COUNT)
         cuda_cores = sm_count * cores_sm
 
-        device = cuda.Device(best_gpu_info['idx'])
+        device = cuda.Device(best_device_info['idx'])
         clock_rate_khz = device.get_attribute(cuda.device_attribute.CLOCK_RATE)
         clock_rate_ghz = clock_rate_khz / 1e6
 
         ideal_gpu_compute = cuda_cores * clock_rate_ghz * 2
 
-        #Since theoretical GPU capability is not possible to achieve, we discount by 10% for LLM processing.
+        #Since theoretical GPU capability is not possible to achieve, we discount by 50% for LLM processing.
 
         gpu_compute = ideal_gpu_compute * 0.5
 
         #batch size = Total GFLOPS / GFLOPS need for 1 token
 
         compute_token = 25 #Assuming it takes 25 GFLOPS for 1 token
+        compute_batch_size = int(gpu_compute / compute_token)
 
-        batch_size = int(gpu_compute // 25)
+        #We perform a ternary search to find optimal gpu layers and batch size, we decide them by using a score
 
-        #If batch size is more then max_batch_size it will occupy more VRAM, so we cap it.
+        def get_config(gpu_layers: int) -> dict[str, float | int]:
+            return get_optimal_batchsize(best_device_info['free_mem'], settings.total_model_layers, gpu_layers, layer_size, total_kvcache, activations_token, compute_batch_size)
 
-        if batch_size > max_batch_size:
-            best_gpu_info['batch_size'] = max_batch_size
-        else:
-            best_gpu_info['batch_size'] = batch_size
+        low, high = 0, settings.total_model_layers
+        while high - low > 2:
+            difference = (high - low) // 3
+            mid1 = low + difference
+            mid2 = high - difference
 
-        return best_gpu_info
+            mid1_score, mid2_score = get_config(mid1)['score'], get_config(mid2)['score']
+
+            if mid1_score < mid2_score:
+                low = mid1
+            else:
+                high = mid2
+
+        best_config = max([get_config(layers) for layers in range(low, high + 1)], key = lambda x : x['score'])
+
+        best_device_info['gpu_layers'] = best_config['layers']
+        best_device_info['batch_size'] = best_config['batch_size']
+
+        return best_device_info
     except:
         return
         
@@ -153,8 +201,10 @@ def get_cuda_library(arch: int, supported_arch: set[int]) -> str | None:
 print("Checking support for GPU accleration...")
 supported_arch = get_supported_arch()
 best_gpu_info = get_gpu_info()
+cuda_library = None
 if best_gpu_info:
     cuda_library = get_cuda_library(best_gpu_info['arch'], supported_arch)
+    ctypes.CDLL(cuda_library)
 
 import threading
 import sys

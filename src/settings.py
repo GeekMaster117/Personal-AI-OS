@@ -11,6 +11,7 @@ sys_cache_dir: str = cuda_dir + "/sys_cache.bin"
 model_dir: str = "models/Phi-3-mini-4k-instruct-q4.gguf"
 total_model_layers: int = 32
 model_window_size: int = 4096
+layer_batchsize_weight = 0.5
 
 experimental_model_name: str = "phi3:mini"
 
