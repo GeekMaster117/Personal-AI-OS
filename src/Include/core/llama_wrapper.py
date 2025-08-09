@@ -230,12 +230,12 @@ class LlamaCPP:
         self.suggestion_engine = SuggestionEngine(db_handler)
 
         self.llm = self._load_llm_quietly()
-        self._load_sys_cache()
+        self._handle_sys_cache()
 
         while True:
             user_input = input("You: ")
             if user_input.lower() in ['exit', 'quit', 'stop']:
-                print("Exiting conversation.")
+                print("Exiting conversation...", flush=True)
                 break
 
             self._handle_chat(user_input)
@@ -252,21 +252,32 @@ class LlamaCPP:
                     n_batch = best_device_info['batch_size'],
                     verbose = False,
                 )
+            
+    def _save_sys_cache(self) -> None:
+        self.llm.create_chat_completion(messages=[
+            {"role": "system", "content": self._get_system_prompt()},
+            {"role": "user", "content": "OK"}
+        ])
+
+        with open(settings.sys_cache_dir, "wb") as file:
+            pickle.dump(self.llm.save_state(), file)
         
     def _load_sys_cache(self) -> None:
-        if not os.path.exists(settings.sys_cache_dir):
-            print("Caching for future use...", flush=True)
-
-            self.llm.create_chat_completion(messages=[
-                {"role": "system", "content": self._get_system_prompt()},
-                {"role": "user", "content": "OK"}
-            ])
-
-            with open(settings.sys_cache_dir, "wb") as file:
-                pickle.dump(self.llm.save_state(), file)
-        
         with open(settings.sys_cache_dir, "rb") as file:
             self.llm.load_state(pickle.load(file))
+
+    def _handle_sys_cache(self) -> None:
+        if os.path.exists(settings.sys_cache_dir):
+            print('Loading Cache...', flush=True)
+            try:
+                self._load_sys_cache()
+                return
+            except:
+                print('Cache incompatibility detected, Will try caching again.')
+        
+        print('Caching for future use...', flush=True)
+        self._save_sys_cache()
+        self._load_sys_cache()
     
     def _get_system_prompt(self) -> str:
         return textwrap.dedent(f"""
