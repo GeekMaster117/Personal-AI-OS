@@ -78,11 +78,9 @@ def get_optimal_batchsize(free_memory, total_layers, gpu_layers, layer_size, kv_
         'batch_size': batch_size
     }
 
-    print(config)
-
     return config
 
-def get_gpu_info() -> list[int] | None:
+def get_gpu_info() -> dict[str, str | int] | None:
     try:
         best_device_info: dict | None = None
         for idx in range(cuda.Device.count()):
@@ -106,23 +104,14 @@ def get_gpu_info() -> list[int] | None:
                 }
 
         if not best_device_info:
-            memory = psutil.virtual_memory()
-            best_device_info = {
-                'idx': -1,
-                'free_mem': memory.free / (1024 ** 2),
-                'total_mem': memory.total / (1024 ** 2)
-            }
+            return
         
-        if best_device_info['idx'] == -1:
-            best_device_info['arch'] = 'cpu'
-            return best_device_info
-        else:
-            device = cuda.Device(best_device_info['idx'])
-            compute_capability = device.compute_capability()
-            arch = (compute_capability[0] * 10) + compute_capability[1]
-            best_device_info['arch'] = arch
+        device = cuda.Device(best_device_info['idx'])
+        compute_capability = device.compute_capability()
+        arch = (compute_capability[0] * 10) + compute_capability[1]
+        best_device_info['arch'] = arch
 
-        #Total VRAM used = gpu_layers * [(total_layers / model_size) + (window_size * KV cache per token per layer) + (batch_size * activations_per_token)]
+        #Total RAM used = layers * [(total_layers / model_size) + (window_size * KV cache per token per layer) + (batch_size * activations_per_token)]
         #All the calculations below happen in MB
 
         model_size = os.path.getsize(settings.model_dir) / (1024 ** 2)
@@ -182,6 +171,21 @@ def get_gpu_info() -> list[int] | None:
         return best_device_info
     except:
         return
+    
+def get_device_info() -> dict[str, str | int]:
+    best_device_info = get_gpu_info()
+    if not best_device_info:
+        memory = psutil.virtual_memory()
+        best_device_info = {
+            'idx': -1,
+            'free_mem': memory.free / (1024 ** 2),
+            'total_mem': memory.total / (1024 ** 2),
+            'arch': 'cpu',
+            'gpu_layers': 0,
+            'batch_size': 16
+        }
+    
+    return best_device_info
         
 def get_cuda_library(arch: int, supported_arch: set[int]) -> str | None:
     if not arch:
@@ -198,12 +202,13 @@ def get_cuda_library(arch: int, supported_arch: set[int]) -> str | None:
 
     print(f"Unable to find library for {arch} architecture")
 
-print("Checking support for GPU accleration...")
+print("Checking support for GPU accleration...", flush=True)
 supported_arch = get_supported_arch()
-best_gpu_info = get_gpu_info()
+best_device_info = get_device_info()
+
 cuda_library = None
-if best_gpu_info:
-    cuda_library = get_cuda_library(best_gpu_info['arch'], supported_arch)
+if best_device_info['arch'] != 'cpu':
+    cuda_library = get_cuda_library(best_device_info['arch'], supported_arch)
     ctypes.CDLL(cuda_library)
 
 import threading
@@ -224,36 +229,33 @@ class LlamaCPP:
         db_handler = MetadataDB(settings.metadata_dir)
         self.suggestion_engine = SuggestionEngine(db_handler)
 
-        if cuda_library:
-            self.llm = self._load_llm_quietly()
-            self._load_sys_cache()
+        self.llm = self._load_llm_quietly()
+        self._load_sys_cache()
 
-            while True:
-                user_input = input("You: ")
-                if user_input.lower() in ['exit', 'quit', 'stop']:
-                    print("Exiting conversation.")
-                    break
+        while True:
+            user_input = input("You: ")
+            if user_input.lower() in ['exit', 'quit', 'stop']:
+                print("Exiting conversation.")
+                break
 
-                self._handle_chat(user_input)
-        else:
-            print("Skipping GPU acceleration...")
+            self._handle_chat(user_input)
 
     def _load_llm_quietly(self) -> llama_cpp.Llama:
-            print("Initialising LLM...")
+            print("Initialising LLM...", flush=True)
             with redirect_stderr(redirect_stderr(StringIO)):
                 return llama_cpp.Llama(
                     model_path = settings.model_dir,
-                    main_gpu = best_gpu_info['idx'],
+                    main_gpu = best_device_info['idx'],
                     n_ctx = settings.model_window_size,
                     n_threads = os.cpu_count(),
-                    n_gpu_layers = best_gpu_info['gpu_layers'],
-                    n_batch = best_gpu_info['batch_size'],
+                    n_gpu_layers = best_device_info['gpu_layers'],
+                    n_batch = best_device_info['batch_size'],
                     verbose = False,
                 )
         
     def _load_sys_cache(self) -> None:
         if not os.path.exists(settings.sys_cache_dir):
-            print("Caching for future use...")
+            print("Caching for future use...", flush=True)
 
             self.llm.create_chat_completion(messages=[
                 {"role": "system", "content": self._get_system_prompt()},
