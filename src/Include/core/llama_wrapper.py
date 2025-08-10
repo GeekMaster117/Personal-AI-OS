@@ -20,8 +20,8 @@ import settings
 
 class LlamaCPP:
     def __init__(self,
-            gpu_max_batch_size: int, 
-            cpu_max_batch_size: int, 
+            gpu_optimal_batchsize: int, 
+            cpu_optimal_batchsize: int, 
             model_path: str | None = None, 
             main_gpu: int | None = None, 
             window_size: int | None = None,
@@ -29,9 +29,10 @@ class LlamaCPP:
             gpu_layers: int | None = None,
             batch_size: int | None = None,
             gpu_acceleration: bool = True, 
-            use_cache: bool = True
+            cache: bool = True
         ):
-        best_device_info = LlamaCPP._get_device_info(gpu_max_batch_size, cpu_max_batch_size, consider_gpu = gpu_acceleration)
+        best_device_info = LlamaCPP._get_device_info(gpu_optimal_batchsize, cpu_optimal_batchsize, gpu = gpu_acceleration)
+        print(best_device_info)
 
         if best_device_info['arch'] != 'cpu':
             ctypes.CDLL(LlamaCPP._get_cuda_library(best_device_info['arch']))
@@ -41,16 +42,16 @@ class LlamaCPP:
         print("Initialising LLM...", flush=True)
         with redirect_stderr(redirect_stderr(StringIO)):
             self.llm = llama_cpp.Llama(
-                model_path = settings.model_dir,
-                main_gpu = best_device_info['idx'],
-                n_ctx = settings.model_window_size,
-                n_threads = os.cpu_count(),
-                n_gpu_layers = best_device_info['gpu_layers'],
-                n_batch = best_device_info['batch_size'],
+                model_path = model_path if model_path else settings.model_dir,
+                main_gpu = main_gpu if main_gpu else best_device_info['idx'],
+                n_ctx = window_size if window_size else settings.model_window_size,
+                n_threads = threads if threads else os.cpu_count(),
+                n_gpu_layers = gpu_layers if gpu_layers else best_device_info['gpu_layers'],
+                n_batch = batch_size if batch_size else best_device_info['batch_size'],
                 verbose = False,
             )
 
-        if use_cache:
+        if cache:
             self._handle_sys_cache()
             
     def _save_sys_cache(self) -> None:
@@ -178,25 +179,7 @@ class LlamaCPP:
 
         return supported_arch
 
-    def _get_cores_per_sm(arch: int) -> int | None:
-        if not arch:
-            print("Unable to detect supported GPU")
-            return
-            
-        core_sm_map: dict[int, int] = {
-            61: 128,
-            75: 64,
-            86: 128,
-            89: 128,
-            120: 128
-        }
-        if arch not in core_sm_map:
-            print("Unsupported gpu architecture detected")
-            return
-
-        return core_sm_map[arch]
-
-    def _get_optimal_batchsize(free_memory, total_layers, gpu_layers, layer_size, kv_cache, activations_token, compute_batch_size) -> dict[str, float | int]:
+    def _get_optimal_config(free_memory, total_layers, gpu_layers, layer_size, kv_cache, activations_token, gpu_optimal_batchsize) -> dict[str, float | int]:
         # VRAM used by layers = (No.of Layers * Size of each Layer) + KV cache per Layer
 
         vram_layers = (gpu_layers * layer_size) + kv_cache
@@ -209,19 +192,18 @@ class LlamaCPP:
 
         #Batch size decided by memory = VRAM used by layers / activation per token
 
-        vram_max_batch_size = vram_left / activations_token
+        vram_optimal_batchsize = vram_left / activations_token
 
-        #Since we don't want to occupy entire GPU VRAM, we discount it by 20%
+        #Since we don't want to occupy entire GPU VRAM, we discount it by 20%. Also llama.cpp may round up the batch size leading to more memory consumption
 
-        vram_batch_size = int(vram_max_batch_size * 0.8)
+        vram_batchsize = int(vram_optimal_batchsize * 0.8)
 
-        batch_size = min(vram_batch_size, compute_batch_size)
+        batch_size = min(vram_batchsize, gpu_optimal_batchsize)
 
-        #Score = throughput - ((total layers - layers) * weight), where weight is preference of layers over batch size.
+        #Score = batch size - ((total layers - layers) * weight), where weight is preference of layers over batch size.
 
-        throughput_score = batch_size
         latency_penalty = (total_layers - gpu_layers) * settings.layer_batchsize_weight
-        score = throughput_score - latency_penalty
+        score = batch_size - latency_penalty
         
         config = {
             'score': score,
@@ -231,7 +213,7 @@ class LlamaCPP:
 
         return config
 
-    def _get_gpu_info(gpu_max_batch_size: int) -> dict[str, str | int] | None:
+    def _get_gpu_info(gpu_optimal_batchsize: int) -> dict[str, str | int] | None:
         try:
             best_device_info: dict | None = None
             for idx in range(cuda.Device.count()):
@@ -273,33 +255,18 @@ class LlamaCPP:
 
             activations_token = 0.00390625 #Rule of thumb is 4KB of activations per token in float16
 
-            #Theoretical GPU capability in GFLOPS = cuda cores * clock rate in GHz * 2
-
-            cores_sm = LlamaCPP._get_cores_per_sm(best_device_info['arch'])
-            if not cores_sm:
-                return
-            sm_count = device.get_attribute(cuda.device_attribute.MULTIPROCESSOR_COUNT)
-            cuda_cores = sm_count * cores_sm
-
-            device = cuda.Device(best_device_info['idx'])
-            clock_rate_khz = device.get_attribute(cuda.device_attribute.CLOCK_RATE)
-            clock_rate_ghz = clock_rate_khz / 1e6
-
-            ideal_gpu_compute = cuda_cores * clock_rate_ghz * 2
-
-            #Since theoretical GPU capability is not possible to achieve, we discount by 50% for LLM processing.
-
-            gpu_compute = ideal_gpu_compute * 0.5
-
-            #batch size = Total GFLOPS / GFLOPS need for 1 token
-
-            compute_token = 25 #Assuming it takes 25 GFLOPS for 1 token
-            compute_batch_size = int(gpu_compute / compute_token)
-
             #We perform a ternary search to find optimal gpu layers and batch size, we decide them by using a score
 
             def get_config(gpu_layers: int) -> dict[str, float | int]:
-                return LlamaCPP._get_optimal_batchsize(best_device_info['free_mem'], settings.total_model_layers, gpu_layers, layer_size, total_kvcache, activations_token, compute_batch_size)
+                return LlamaCPP._get_optimal_config(
+                    best_device_info['free_mem'], 
+                    settings.total_model_layers, 
+                    gpu_layers, 
+                    layer_size, 
+                    total_kvcache, 
+                    activations_token, 
+                    gpu_optimal_batchsize
+                )
 
             low, high = 0, settings.total_model_layers
             while high - low > 2:
@@ -323,11 +290,11 @@ class LlamaCPP:
         except:
             return
         
-    def _get_device_info(gpu_max_batch_size: int, cpu_max_batch_size: int, consider_gpu: bool = True) -> dict[str, str | int]:
+    def _get_device_info(gpu_optimal_batchsize: int, cpu_optimal_batchsize: int, gpu: bool = True) -> dict[str, str | int]:
         best_device_info = None
-        if consider_gpu:
+        if gpu:
             print("Checking support for GPU accleration...", flush=True)
-            best_device_info = LlamaCPP._get_gpu_info(gpu_max_batch_size)
+            best_device_info = LlamaCPP._get_gpu_info(gpu_optimal_batchsize)
 
         if not best_device_info:
             print("Skipping GPU acceleration.")
@@ -338,7 +305,7 @@ class LlamaCPP:
                 'total_mem': memory.total / (1024 ** 2),
                 'arch': 'cpu',
                 'gpu_layers': 0,
-                'batch_size': cpu_max_batch_size
+                'batch_size': cpu_optimal_batchsize
             }
         
         return best_device_info
@@ -390,27 +357,30 @@ class LlamaCPP:
         response = self.llm.create_completion(prompt = test_prompt, max_tokens = max_tokens, temperature=0.1)
         end = time.monotonic()
 
-        generated_text = response['choices'][0]['text']
-        actual_tokens = len(generated_text.split())
+        usage = response.get('usage', {})
+        completion_tokens = usage.get('completion_tokens', max_tokens)
 
         #Returns tokens processed per second
-        return int(actual_tokens / (end - start))
+        return int(completion_tokens / (end - start))
+    
+    def supports_gpu_acceleration() -> bool:
+        return cuda.Device.count() != 0
 
-llama = LlamaCPP()
+# llama = LlamaCPP()
 
-db_handler = MetadataDB(settings.metadata_dir)
-suggestion_engine = SuggestionEngine(db_handler)
+# db_handler = MetadataDB(settings.metadata_dir)
+# suggestion_engine = SuggestionEngine(db_handler)
 
-def get_suffix() -> str:
-    return textwrap.dedent(f"""
-        Use this data to generate suggestions
-        {suggestion_engine.processed_logs.get()}
-    """)
+# def get_suffix() -> str:
+#     return textwrap.dedent(f"""
+#         Use this data to generate suggestions
+#         {suggestion_engine.processed_logs.get()}
+#     """)
 
-while True:
-    user_input = input("You: ")
-    if user_input.lower() in ['exit', 'quit', 'stop']:
-        print("Exiting conversation...", flush=True)
-        break
+# while True:
+#     user_input = input("You: ")
+#     if user_input.lower() in ['exit', 'quit', 'stop']:
+#         print("Exiting conversation...", flush=True)
+#         break
 
-    llama.chat(user_input, get_suffix())
+#     llama.chat(user_input, get_suffix())
