@@ -19,22 +19,28 @@ from Include.core.metadatadb import MetadataDB
 import settings
 
 class LlamaCPP:
-    def __init__(self, model_path, main_gpu, window_size, cpu_threads, gpu_layers, batch_size):
+    def __init__(self, gpu_max_batch_size, cpu_max_batch_size, gpu_acceleration: bool = True, use_cache: bool = True):
+        best_device_info = LlamaCPP._get_device_info(gpu_max_batch_size, cpu_max_batch_size, consider_gpu = gpu_acceleration)
+
+        if best_device_info['arch'] != 'cpu':
+            ctypes.CDLL(LlamaCPP._get_cuda_library(best_device_info['arch']))
+
         import llama_cpp
 
         print("Initialising LLM...", flush=True)
         with redirect_stderr(redirect_stderr(StringIO)):
             self.llm = llama_cpp.Llama(
-                model_path = model_path,
-                main_gpu = main_gpu,
-                n_ctx = window_size,
-                n_threads = cpu_threads,
-                n_gpu_layers = gpu_layers,
-                n_batch = batch_size,
+                model_path = settings.model_dir,
+                main_gpu = best_device_info['idx'],
+                n_ctx = settings.model_window_size,
+                n_threads = os.cpu_count(),
+                n_gpu_layers = best_device_info['gpu_layers'],
+                n_batch = best_device_info['batch_size'],
                 verbose = False,
             )
 
-        self._handle_sys_cache()
+        if use_cache:
+            self._handle_sys_cache()
             
     def _save_sys_cache(self) -> None:
         self.llm.create_chat_completion(messages=[
@@ -140,40 +146,7 @@ class LlamaCPP:
         sys.stdout.write('\r \r')
         sys.stdout.flush()
 
-    def chat(self, user_prompt: str, suffix: str) -> None:
-        messages = [
-            {"role": "user", "content": user_prompt + suffix}
-        ]
-
-        spinner_flag = {'running': True}
-        spinner_thread = threading.Thread(
-            target = self._loading_spinner,
-            args = ("Thinking", spinner_flag,)
-        )
-        spinner_thread.start()
-
-        first_chunk = True
-        for chunk in self.llm.create_chat_completion(messages=messages, temperature=0.7, top_p=0.9, stream=True):
-            if first_chunk:
-                spinner_flag['running'] = False
-                spinner_thread.join()
-                first_chunk = False
-                print("LLM: ", end='', flush=True)
-
-            delta = chunk["choices"][0]["delta"]
-            content = delta.get("content", "")
-            print(content, end='', flush=True)
-        print("\n")
-
-    def run_inference(self, test_prompt: str, max_tokens: int) -> float:
-        start = time.monotonic()
-        self.llm(test_prompt, max_tokens)
-        end = time.monotonic()
-
-        #Returns tokens processed per second
-        return (max_tokens / (end - start))
-
-    def get_supported_arch() -> set[int]:
+    def _get_supported_arch() -> set[int]:
         supported_arch: set[int] = set()
 
         for library in os.listdir(settings.cuda_dir):
@@ -194,7 +167,7 @@ class LlamaCPP:
 
         return supported_arch
 
-    def get_cores_per_sm(arch: int) -> int | None:
+    def _get_cores_per_sm(arch: int) -> int | None:
         if not arch:
             print("Unable to detect supported GPU")
             return
@@ -212,7 +185,7 @@ class LlamaCPP:
 
         return core_sm_map[arch]
 
-    def get_optimal_batchsize(free_memory, total_layers, gpu_layers, layer_size, kv_cache, activations_token, compute_batch_size) -> dict[str, float | int]:
+    def _get_optimal_batchsize(free_memory, total_layers, gpu_layers, layer_size, kv_cache, activations_token, compute_batch_size) -> dict[str, float | int]:
         # VRAM used by layers = (No.of Layers * Size of each Layer) + KV cache per Layer
 
         vram_layers = (gpu_layers * layer_size) + kv_cache
@@ -247,7 +220,7 @@ class LlamaCPP:
 
         return config
 
-    def get_gpu_info() -> dict[str, str | int] | None:
+    def _get_gpu_info(gpu_max_batch_size: int) -> dict[str, str | int] | None:
         try:
             best_device_info: dict | None = None
             for idx in range(cuda.Device.count()):
@@ -291,7 +264,7 @@ class LlamaCPP:
 
             #Theoretical GPU capability in GFLOPS = cuda cores * clock rate in GHz * 2
 
-            cores_sm = LlamaCPP.get_cores_per_sm(best_device_info['arch'])
+            cores_sm = LlamaCPP._get_cores_per_sm(best_device_info['arch'])
             if not cores_sm:
                 return
             sm_count = device.get_attribute(cuda.device_attribute.MULTIPROCESSOR_COUNT)
@@ -315,7 +288,7 @@ class LlamaCPP:
             #We perform a ternary search to find optimal gpu layers and batch size, we decide them by using a score
 
             def get_config(gpu_layers: int) -> dict[str, float | int]:
-                return LlamaCPP.get_optimal_batchsize(best_device_info['free_mem'], settings.total_model_layers, gpu_layers, layer_size, total_kvcache, activations_token, compute_batch_size)
+                return LlamaCPP._get_optimal_batchsize(best_device_info['free_mem'], settings.total_model_layers, gpu_layers, layer_size, total_kvcache, activations_token, compute_batch_size)
 
             low, high = 0, settings.total_model_layers
             while high - low > 2:
@@ -339,9 +312,14 @@ class LlamaCPP:
         except:
             return
         
-    def get_device_info() -> dict[str, str | int]:
-        best_device_info = LlamaCPP.get_gpu_info()
+    def _get_device_info(gpu_max_batch_size: int, cpu_max_batch_size: int, consider_gpu: bool = True) -> dict[str, str | int]:
+        best_device_info = None
+        if consider_gpu:
+            print("Checking support for GPU accleration...", flush=True)
+            best_device_info = LlamaCPP._get_gpu_info(gpu_max_batch_size)
+
         if not best_device_info:
+            print("Skipping GPU acceleration.")
             memory = psutil.virtual_memory()
             best_device_info = {
                 'idx': -1,
@@ -349,15 +327,17 @@ class LlamaCPP:
                 'total_mem': memory.total / (1024 ** 2),
                 'arch': 'cpu',
                 'gpu_layers': 0,
-                'batch_size': 16
+                'batch_size': cpu_max_batch_size
             }
         
         return best_device_info
             
-    def get_cuda_library(arch: int, supported_arch: set[int]) -> str | None:
+    def _get_cuda_library(arch: int) -> str | None:
         if not arch:
             print("Unable to detect supported GPU")
             return
+        
+        supported_arch = LlamaCPP._get_supported_arch()
         if arch not in supported_arch:
             print("Unsupported gpu architecture detected")
             return
@@ -369,23 +349,43 @@ class LlamaCPP:
 
         print(f"Unable to find library for {arch} architecture")
 
-print("Checking support for GPU accleration...", flush=True)
-supported_arch = LlamaCPP.get_supported_arch()
-best_device_info = LlamaCPP.get_device_info()
+    def chat(self, user_prompt: str, suffix: str) -> None:
+        messages = [
+            {"role": "user", "content": user_prompt + suffix}
+        ]
 
-cuda_library = None
-if best_device_info['arch'] != 'cpu':
-    cuda_library = LlamaCPP.get_cuda_library(best_device_info['arch'], supported_arch)
-    ctypes.CDLL(cuda_library)
+        spinner_flag = {'running': True}
+        spinner_thread = threading.Thread(
+            target = self._loading_spinner,
+            args = ("Thinking", spinner_flag,)
+        )
+        spinner_thread.start()
 
-llama = LlamaCPP(
-    settings.model_dir, 
-    best_device_info['idx'], 
-    settings.model_window_size, 
-    os.cpu_count(), 
-    best_device_info['gpu_layers'], 
-    best_device_info['batch_size']
-)
+        first_chunk = True
+        for chunk in self.llm.create_chat_completion(messages=messages, temperature=0.7, top_p=0.9, stream=True):
+            if first_chunk:
+                spinner_flag['running'] = False
+                spinner_thread.join()
+                first_chunk = False
+                print("LLM: ", end='', flush=True)
+
+            delta = chunk["choices"][0]["delta"]
+            content = delta.get("content", "")
+            print(content, end='', flush=True)
+        print("\n")
+
+    def run_inference(self, test_prompt: str, max_tokens: int) -> int:
+        start = time.monotonic()
+        response = self.llm.create_completion(prompt = test_prompt, max_tokens = max_tokens, temperature=0.1)
+        end = time.monotonic()
+
+        generated_text = response['choices'][0]['text']
+        actual_tokens = len(generated_text.split())
+
+        #Returns tokens processed per second
+        return int(actual_tokens / (end - start))
+
+llama = LlamaCPP()
 
 db_handler = MetadataDB(settings.metadata_dir)
 suggestion_engine = SuggestionEngine(db_handler)
