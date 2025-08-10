@@ -3,255 +3,38 @@ import pycuda.driver as cuda
 import ctypes
 import os
 import psutil
-
-import settings
-
-def get_supported_arch() -> set[int]:
-    supported_arch: set[int] = set()
-
-    for library in os.listdir(settings.cuda_dir):
-        filename, filetype = library.split('.')
-
-        if filetype != 'dll':
-            continue
-
-        idx = len(filename) - 1
-        while idx >= 0:
-            if filename[idx] == '_':
-                break
-            idx -= 1
-
-        arch = filename[idx + 1:]
-        if arch.isdigit():
-            supported_arch.add(int(arch))
-
-    return supported_arch
-
-def get_cores_per_sm(arch: int) -> int | None:
-    if not arch:
-        print("Unable to detect supported GPU")
-        return
-        
-    core_sm_map: dict[int, int] = {
-        61: 128,
-        75: 64,
-        86: 128,
-        89: 128,
-        120: 128
-    }
-    if arch not in core_sm_map:
-        print("Unsupported gpu architecture detected")
-        return
-
-    return core_sm_map[arch]
-
-def get_optimal_batchsize(free_memory, total_layers, gpu_layers, layer_size, kv_cache, activations_token, compute_batch_size) -> dict[str, float | int]:
-    # VRAM used by layers = (No.of Layers * Size of each Layer) + KV cache per Layer
-
-    vram_layers = (gpu_layers * layer_size) + kv_cache
-    vram_left = free_memory - vram_layers
-
-    #Returns negative infinite score when no free VRAM left
-
-    if vram_left <= 0:
-        return {'score': -float('inf'), 'batch_size': 0}
-
-    #Batch size decided by memory = VRAM used by layers / activation per token
-
-    vram_max_batch_size = vram_left / activations_token
-
-    #Since we don't want to occupy entire GPU VRAM, we discount it by 20%
-
-    vram_batch_size = int(vram_max_batch_size * 0.8)
-
-    batch_size = min(vram_batch_size, compute_batch_size)
-
-    #Score = throughput - ((total layers - layers) * weight), where weight is preference of layers over batch size.
-
-    throughput_score = batch_size
-    latency_penalty = (total_layers - gpu_layers) * settings.layer_batchsize_weight
-    score = throughput_score - latency_penalty
-    
-    config = {
-        'score': score,
-        'layers': gpu_layers,
-        'batch_size': batch_size
-    }
-
-    return config
-
-def get_gpu_info() -> dict[str, str | int] | None:
-    try:
-        best_device_info: dict | None = None
-        for idx in range(cuda.Device.count()):
-            device = cuda.Device(idx)
-            context = device.make_context()
-            free_mem, total_mem = cuda.mem_get_info()
-            context.pop()
-
-            if best_device_info:
-                if (best_device_info['free_mem'] < free_mem) or (best_device_info['free_mem'] == free_mem and best_device_info['total_mem'] < total_mem):
-                    best_device_info = {
-                        'idx': idx,
-                        'free_mem': free_mem,
-                        'total_mem': total_mem
-                    }
-            else:
-                best_device_info = {
-                    'idx': idx,
-                    'free_mem': free_mem,
-                    'total_mem': total_mem
-                }
-
-        if not best_device_info:
-            return
-        
-        device = cuda.Device(best_device_info['idx'])
-        compute_capability = device.compute_capability()
-        arch = (compute_capability[0] * 10) + compute_capability[1]
-        best_device_info['arch'] = arch
-
-        #Total RAM used = layers * [(total_layers / model_size) + (window_size * KV cache per token per layer) + (batch_size * activations_per_token)]
-        #All the calculations below happen in MB
-
-        model_size = os.path.getsize(settings.model_dir) / (1024 ** 2)
-        layer_size = settings.total_model_layers / model_size
-
-        kvcache_token_layer = 0.0009765625 #Rule of thumb is 1KB of kv cache per token per layer in float16
-        total_kvcache = settings.model_window_size * kvcache_token_layer
-
-        activations_token = 0.00390625 #Rule of thumb is 4KB of activations per token in float16
-
-        #Theoretical GPU capability in GFLOPS = cuda cores * clock rate in GHz * 2
-
-        cores_sm = get_cores_per_sm(best_device_info['arch'])
-        if not cores_sm:
-            return
-        sm_count = device.get_attribute(cuda.device_attribute.MULTIPROCESSOR_COUNT)
-        cuda_cores = sm_count * cores_sm
-
-        device = cuda.Device(best_device_info['idx'])
-        clock_rate_khz = device.get_attribute(cuda.device_attribute.CLOCK_RATE)
-        clock_rate_ghz = clock_rate_khz / 1e6
-
-        ideal_gpu_compute = cuda_cores * clock_rate_ghz * 2
-
-        #Since theoretical GPU capability is not possible to achieve, we discount by 50% for LLM processing.
-
-        gpu_compute = ideal_gpu_compute * 0.5
-
-        #batch size = Total GFLOPS / GFLOPS need for 1 token
-
-        compute_token = 25 #Assuming it takes 25 GFLOPS for 1 token
-        compute_batch_size = int(gpu_compute / compute_token)
-
-        #We perform a ternary search to find optimal gpu layers and batch size, we decide them by using a score
-
-        def get_config(gpu_layers: int) -> dict[str, float | int]:
-            return get_optimal_batchsize(best_device_info['free_mem'], settings.total_model_layers, gpu_layers, layer_size, total_kvcache, activations_token, compute_batch_size)
-
-        low, high = 0, settings.total_model_layers
-        while high - low > 2:
-            difference = (high - low) // 3
-            mid1 = low + difference
-            mid2 = high - difference
-
-            mid1_score, mid2_score = get_config(mid1)['score'], get_config(mid2)['score']
-
-            if mid1_score < mid2_score:
-                low = mid1
-            else:
-                high = mid2
-
-        best_config = max([get_config(layers) for layers in range(low, high + 1)], key = lambda x : x['score'])
-
-        best_device_info['gpu_layers'] = best_config['layers']
-        best_device_info['batch_size'] = best_config['batch_size']
-
-        return best_device_info
-    except:
-        return
-    
-def get_device_info() -> dict[str, str | int]:
-    best_device_info = get_gpu_info()
-    if not best_device_info:
-        memory = psutil.virtual_memory()
-        best_device_info = {
-            'idx': -1,
-            'free_mem': memory.free / (1024 ** 2),
-            'total_mem': memory.total / (1024 ** 2),
-            'arch': 'cpu',
-            'gpu_layers': 0,
-            'batch_size': 16
-        }
-    
-    return best_device_info
-        
-def get_cuda_library(arch: int, supported_arch: set[int]) -> str | None:
-    if not arch:
-        print("Unable to detect supported GPU")
-        return
-    if arch not in supported_arch:
-        print("Unsupported gpu architecture detected")
-        return
-
-    for library in os.listdir(settings.cuda_dir):
-        if library.split('.')[0].split('_')[-1] == str(arch):
-            cuda_library = f"{settings.cuda_dir}/" + library
-            return cuda_library
-
-    print(f"Unable to find library for {arch} architecture")
-
-print("Checking support for GPU accleration...", flush=True)
-supported_arch = get_supported_arch()
-best_device_info = get_device_info()
-
-cuda_library = None
-if best_device_info['arch'] != 'cpu':
-    cuda_library = get_cuda_library(best_device_info['arch'], supported_arch)
-    ctypes.CDLL(cuda_library)
-
 import threading
 import sys
 import time
 import itertools
 import textwrap
 import pickle
+import time
 from io import StringIO
 from contextlib import redirect_stderr
-import llama_cpp
 
 from Include.core.suggestion_engine import SuggestionEngine
 from Include.core.metadatadb import MetadataDB
 
+import settings
+
 class LlamaCPP:
-    def __init__(self):
-        db_handler = MetadataDB(settings.metadata_dir)
-        self.suggestion_engine = SuggestionEngine(db_handler)
+    def __init__(self, model_path, main_gpu, window_size, cpu_threads, gpu_layers, batch_size):
+        import llama_cpp
 
-        self.llm = self._load_llm_quietly()
+        print("Initialising LLM...", flush=True)
+        with redirect_stderr(redirect_stderr(StringIO)):
+            self.llm = llama_cpp.Llama(
+                model_path = model_path,
+                main_gpu = main_gpu,
+                n_ctx = window_size,
+                n_threads = cpu_threads,
+                n_gpu_layers = gpu_layers,
+                n_batch = batch_size,
+                verbose = False,
+            )
+
         self._handle_sys_cache()
-
-        while True:
-            user_input = input("You: ")
-            if user_input.lower() in ['exit', 'quit', 'stop']:
-                print("Exiting conversation...", flush=True)
-                break
-
-            self._handle_chat(user_input)
-
-    def _load_llm_quietly(self) -> llama_cpp.Llama:
-            print("Initialising LLM...", flush=True)
-            with redirect_stderr(redirect_stderr(StringIO)):
-                return llama_cpp.Llama(
-                    model_path = settings.model_dir,
-                    main_gpu = best_device_info['idx'],
-                    n_ctx = settings.model_window_size,
-                    n_threads = os.cpu_count(),
-                    n_gpu_layers = best_device_info['gpu_layers'],
-                    n_batch = best_device_info['batch_size'],
-                    verbose = False,
-                )
             
     def _save_sys_cache(self) -> None:
         self.llm.create_chat_completion(messages=[
@@ -347,12 +130,6 @@ class LlamaCPP:
 
             You are not just analyzing — you are mentoring gently, like a productivity coach fused into an OS.
         """)
-    
-    def _add_user_suffix(self, user_prompt) -> str:
-        return user_prompt + textwrap.dedent(f"""
-            Use this data to generate suggestions
-            {self.suggestion_engine.processed_logs.get()}
-        """)
 
     def _loading_spinner(self, loading_message, flag):
         spinner = itertools.cycle(['|', '/', '-', '\\'])
@@ -363,9 +140,9 @@ class LlamaCPP:
         sys.stdout.write('\r \r')
         sys.stdout.flush()
 
-    def _handle_chat(self, user_prompt: str) -> None:
+    def chat(self, user_prompt: str, suffix: str) -> None:
         messages = [
-            {"role": "user", "content": self._add_user_suffix(user_prompt)}
+            {"role": "user", "content": user_prompt + suffix}
         ]
 
         spinner_flag = {'running': True}
@@ -388,4 +165,241 @@ class LlamaCPP:
             print(content, end='', flush=True)
         print("\n")
 
-test = LlamaCPP()
+    def run_inference(self, test_prompt: str, max_tokens: int) -> float:
+        start = time.monotonic()
+        self.llm(test_prompt, max_tokens)
+        end = time.monotonic()
+
+        #Returns tokens processed per second
+        return (max_tokens / (end - start))
+
+    def get_supported_arch() -> set[int]:
+        supported_arch: set[int] = set()
+
+        for library in os.listdir(settings.cuda_dir):
+            filename, filetype = library.split('.')
+
+            if filetype != 'dll':
+                continue
+
+            idx = len(filename) - 1
+            while idx >= 0:
+                if filename[idx] == '_':
+                    break
+                idx -= 1
+
+            arch = filename[idx + 1:]
+            if arch.isdigit():
+                supported_arch.add(int(arch))
+
+        return supported_arch
+
+    def get_cores_per_sm(arch: int) -> int | None:
+        if not arch:
+            print("Unable to detect supported GPU")
+            return
+            
+        core_sm_map: dict[int, int] = {
+            61: 128,
+            75: 64,
+            86: 128,
+            89: 128,
+            120: 128
+        }
+        if arch not in core_sm_map:
+            print("Unsupported gpu architecture detected")
+            return
+
+        return core_sm_map[arch]
+
+    def get_optimal_batchsize(free_memory, total_layers, gpu_layers, layer_size, kv_cache, activations_token, compute_batch_size) -> dict[str, float | int]:
+        # VRAM used by layers = (No.of Layers * Size of each Layer) + KV cache per Layer
+
+        vram_layers = (gpu_layers * layer_size) + kv_cache
+        vram_left = free_memory - vram_layers
+
+        #Returns negative infinite score when no free VRAM left
+
+        if vram_left <= 0:
+            return {'score': -float('inf'), 'batch_size': 0}
+
+        #Batch size decided by memory = VRAM used by layers / activation per token
+
+        vram_max_batch_size = vram_left / activations_token
+
+        #Since we don't want to occupy entire GPU VRAM, we discount it by 20%
+
+        vram_batch_size = int(vram_max_batch_size * 0.8)
+
+        batch_size = min(vram_batch_size, compute_batch_size)
+
+        #Score = throughput - ((total layers - layers) * weight), where weight is preference of layers over batch size.
+
+        throughput_score = batch_size
+        latency_penalty = (total_layers - gpu_layers) * settings.layer_batchsize_weight
+        score = throughput_score - latency_penalty
+        
+        config = {
+            'score': score,
+            'layers': gpu_layers,
+            'batch_size': batch_size
+        }
+
+        return config
+
+    def get_gpu_info() -> dict[str, str | int] | None:
+        try:
+            best_device_info: dict | None = None
+            for idx in range(cuda.Device.count()):
+                device = cuda.Device(idx)
+                context = device.make_context()
+                free_mem, total_mem = cuda.mem_get_info()
+                context.pop()
+
+                if best_device_info:
+                    if (best_device_info['free_mem'] < free_mem) or (best_device_info['free_mem'] == free_mem and best_device_info['total_mem'] < total_mem):
+                        best_device_info = {
+                            'idx': idx,
+                            'free_mem': free_mem,
+                            'total_mem': total_mem
+                        }
+                else:
+                    best_device_info = {
+                        'idx': idx,
+                        'free_mem': free_mem,
+                        'total_mem': total_mem
+                    }
+
+            if not best_device_info:
+                return
+            
+            device = cuda.Device(best_device_info['idx'])
+            compute_capability = device.compute_capability()
+            arch = (compute_capability[0] * 10) + compute_capability[1]
+            best_device_info['arch'] = arch
+
+            #Total RAM used = layers * [(total_layers / model_size) + (window_size * KV cache per token per layer) + (batch_size * activations_per_token)]
+            #All the calculations below happen in MB
+
+            model_size = os.path.getsize(settings.model_dir) / (1024 ** 2)
+            layer_size = settings.total_model_layers / model_size
+
+            kvcache_token_layer = 0.0009765625 #Rule of thumb is 1KB of kv cache per token per layer in float16
+            total_kvcache = settings.model_window_size * kvcache_token_layer
+
+            activations_token = 0.00390625 #Rule of thumb is 4KB of activations per token in float16
+
+            #Theoretical GPU capability in GFLOPS = cuda cores * clock rate in GHz * 2
+
+            cores_sm = LlamaCPP.get_cores_per_sm(best_device_info['arch'])
+            if not cores_sm:
+                return
+            sm_count = device.get_attribute(cuda.device_attribute.MULTIPROCESSOR_COUNT)
+            cuda_cores = sm_count * cores_sm
+
+            device = cuda.Device(best_device_info['idx'])
+            clock_rate_khz = device.get_attribute(cuda.device_attribute.CLOCK_RATE)
+            clock_rate_ghz = clock_rate_khz / 1e6
+
+            ideal_gpu_compute = cuda_cores * clock_rate_ghz * 2
+
+            #Since theoretical GPU capability is not possible to achieve, we discount by 50% for LLM processing.
+
+            gpu_compute = ideal_gpu_compute * 0.5
+
+            #batch size = Total GFLOPS / GFLOPS need for 1 token
+
+            compute_token = 25 #Assuming it takes 25 GFLOPS for 1 token
+            compute_batch_size = int(gpu_compute / compute_token)
+
+            #We perform a ternary search to find optimal gpu layers and batch size, we decide them by using a score
+
+            def get_config(gpu_layers: int) -> dict[str, float | int]:
+                return LlamaCPP.get_optimal_batchsize(best_device_info['free_mem'], settings.total_model_layers, gpu_layers, layer_size, total_kvcache, activations_token, compute_batch_size)
+
+            low, high = 0, settings.total_model_layers
+            while high - low > 2:
+                difference = (high - low) // 3
+                mid1 = low + difference
+                mid2 = high - difference
+
+                mid1_score, mid2_score = get_config(mid1)['score'], get_config(mid2)['score']
+
+                if mid1_score < mid2_score:
+                    low = mid1
+                else:
+                    high = mid2
+
+            best_config = max([get_config(layers) for layers in range(low, high + 1)], key = lambda x : x['score'])
+
+            best_device_info['gpu_layers'] = best_config['layers']
+            best_device_info['batch_size'] = best_config['batch_size']
+
+            return best_device_info
+        except:
+            return
+        
+    def get_device_info() -> dict[str, str | int]:
+        best_device_info = LlamaCPP.get_gpu_info()
+        if not best_device_info:
+            memory = psutil.virtual_memory()
+            best_device_info = {
+                'idx': -1,
+                'free_mem': memory.free / (1024 ** 2),
+                'total_mem': memory.total / (1024 ** 2),
+                'arch': 'cpu',
+                'gpu_layers': 0,
+                'batch_size': 16
+            }
+        
+        return best_device_info
+            
+    def get_cuda_library(arch: int, supported_arch: set[int]) -> str | None:
+        if not arch:
+            print("Unable to detect supported GPU")
+            return
+        if arch not in supported_arch:
+            print("Unsupported gpu architecture detected")
+            return
+
+        for library in os.listdir(settings.cuda_dir):
+            if library.split('.')[0].split('_')[-1] == str(arch):
+                cuda_library = f"{settings.cuda_dir}/" + library
+                return cuda_library
+
+        print(f"Unable to find library for {arch} architecture")
+
+print("Checking support for GPU accleration...", flush=True)
+supported_arch = LlamaCPP.get_supported_arch()
+best_device_info = LlamaCPP.get_device_info()
+
+cuda_library = None
+if best_device_info['arch'] != 'cpu':
+    cuda_library = LlamaCPP.get_cuda_library(best_device_info['arch'], supported_arch)
+    ctypes.CDLL(cuda_library)
+
+llama = LlamaCPP(
+    settings.model_dir, 
+    best_device_info['idx'], 
+    settings.model_window_size, 
+    os.cpu_count(), 
+    best_device_info['gpu_layers'], 
+    best_device_info['batch_size']
+)
+
+db_handler = MetadataDB(settings.metadata_dir)
+suggestion_engine = SuggestionEngine(db_handler)
+
+def get_suffix() -> str:
+    return textwrap.dedent(f"""
+        Use this data to generate suggestions
+        {suggestion_engine.processed_logs.get()}
+    """)
+
+while True:
+    user_input = input("You: ")
+    if user_input.lower() in ['exit', 'quit', 'stop']:
+        print("Exiting conversation...", flush=True)
+        break
+
+    llama.chat(user_input, get_suffix())
