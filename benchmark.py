@@ -10,9 +10,27 @@ class Benchmark:
 
     def run_cpu_benchmark() -> int:
         print("Running CPU benchmark...", flush=True)
-        for batch_size in [8, 16, 32, 64, 128]:
-            llama = LlamaCPP(0, batch_size, gpu_acceleration = False, use_cache = False)
-            print(llama.run_inference(Benchmark.test_prompt, Benchmark.max_tokens))
+
+        def test_batchsize(batch_size: int) -> int:
+            llama = LlamaCPP(gpu_max_batch_size = 0, cpu_max_batch_size = batch_size, gpu_acceleration = False, use_cache = False)
+            throughput = llama.run_inference(Benchmark.test_prompt, Benchmark.max_tokens)
             del llama
-    
-print(Benchmark.run_cpu_benchmark())
+
+            return throughput
+
+        two_powers = [i for i in range(2, 7)]
+
+        best_batchsize = 2
+        best_throughput = 0
+        for power in two_powers:
+            batch_size = 2 ** power
+            print("\nTesting CPU throughput with batch size:", batch_size)
+
+            throughput = test_batchsize(2 ** power)
+            print("Throughput:", throughput)
+
+            if throughput > best_throughput:
+                best_batchsize = batch_size
+                best_throughput = throughput
+
+        return best_batchsize
