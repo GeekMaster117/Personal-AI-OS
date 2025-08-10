@@ -19,7 +19,18 @@ from Include.core.metadatadb import MetadataDB
 import settings
 
 class LlamaCPP:
-    def __init__(self, gpu_max_batch_size, cpu_max_batch_size, gpu_acceleration: bool = True, use_cache: bool = True):
+    def __init__(self,
+            gpu_max_batch_size: int, 
+            cpu_max_batch_size: int, 
+            model_path: str | None = None, 
+            main_gpu: int | None = None, 
+            window_size: int | None = None,
+            threads: int | None = None,
+            gpu_layers: int | None = None,
+            batch_size: int | None = None,
+            gpu_acceleration: bool = True, 
+            use_cache: bool = True
+        ):
         best_device_info = LlamaCPP._get_device_info(gpu_max_batch_size, cpu_max_batch_size, consider_gpu = gpu_acceleration)
 
         if best_device_info['arch'] != 'cpu':
