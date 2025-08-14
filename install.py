@@ -51,7 +51,7 @@ def download_model(url: str, dest_path: str, retries: int = 3, timeout: int = 30
                 raise
 
 def benchmark(mode: str) -> None:
-    subprocess.run([sys.executable, "benchmark_cli.py", mode], check=True)
+    subprocess.run(["benchmark_cli.exe", mode], check=True)
 
 if __name__ == "__main__":
     with open("requirements/model-requirements.txt", "r") as file:
