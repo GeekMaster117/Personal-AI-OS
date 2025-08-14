@@ -32,7 +32,6 @@ class LlamaCPP:
             cache: bool = True
         ):
         best_device_info = LlamaCPP._get_device_info(gpu_optimal_batchsize, cpu_optimal_batchsize, gpu = gpu_acceleration)
-        print(best_device_info)
 
         if best_device_info['arch'] != 'cpu':
             ctypes.CDLL(LlamaCPP._get_cuda_library(best_device_info['arch']))
