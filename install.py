@@ -2,8 +2,9 @@ import os
 import requests
 import sys
 import time
+import subprocess
 
-def download_model(url: str, dest_path: str, retries: int = 3, timeout: int = 30):
+def download_model(url: str, dest_path: str, retries: int = 3, timeout: int = 30) -> None:
     if os.path.exists(dest_path):
         print(f"Model already exists at {dest_path}\n")
         answer = input("Would you like to reinstall? (Y/N): ").lower()
@@ -49,6 +50,9 @@ def download_model(url: str, dest_path: str, retries: int = 3, timeout: int = 30
                         print(f"Failed to delete incomplete file: {dest_path} due to {cleanup_error}. Please delete it manually, before trying to install again.\n")
                 raise
 
+def benchmark(mode: str) -> None:
+    subprocess.run([sys.executable, "benchmark_cli.py", mode], check=True)
+
 if __name__ == "__main__":
     with open("requirements/model-requirements.txt", "r") as file:
         for line in file:
@@ -59,3 +63,10 @@ if __name__ == "__main__":
             DEST_PATH = "models/" + MODEL_URL.split("/")[-1]
             os.makedirs("models/", exist_ok=True)
             download_model(MODEL_URL, DEST_PATH)
+    print("Models installed successfully.\n")
+
+    benchmark("cpu")
+    print("CPU benchmark completed.")
+
+    benchmark("gpu")
+    print("GPU benchmark completed.")
