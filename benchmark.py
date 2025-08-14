@@ -1,15 +1,28 @@
 import os
-import ctypes
+import json
 
-from src.Include.core.llama_wrapper import LlamaCPP 
-import settings
+from src.Include.core.llama_wrapper import LlamaCPP
 
 class Benchmark:
     test_prompt = "Hello " * 10
     max_tokens = 50
     batch_sizes = [4, 6, 8, 16, 32, 64]
 
-    def get_cpu_optimal_batchsize() -> int:
+    def _save_config(key, value):
+        if os.path.exists('device_config.json'):
+            with open('device_config.json', "r") as f:
+                try:
+                    config = json.load(f)
+                except json.JSONDecodeError:
+                    config = {}
+        else:
+            config = {}
+
+        config[key] = value
+        with open('device_config.json', "w") as f:
+            json.dump(config, f)
+
+    def config_cpu_optimal_batchsize() -> None:
         print("Running CPU benchmark...", flush=True)
 
         def test_batchsize(batch_size: int) -> int:
@@ -31,9 +44,9 @@ class Benchmark:
             else:
                 break
 
-        return best_batchsize
-    
-    def get_gpu_optimal_batchsize() -> int:
+        Benchmark._save_config("cpu_optimal_batchsize", best_batchsize)
+
+    def config_gpu_optimal_batchsize() -> None:
         print("Running GPU benchmark...", flush=True)
 
         if not LlamaCPP.supports_gpu_acceleration():
@@ -59,7 +72,4 @@ class Benchmark:
             else:
                 break
 
-        return best_batchsize
-    
-print(Benchmark.get_cpu_optimal_batchsize())
-print(Benchmark.get_gpu_optimal_batchsize())
+        Benchmark._save_config("gpu_optimal_batchsize", best_batchsize)
