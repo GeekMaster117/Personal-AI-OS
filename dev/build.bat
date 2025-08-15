@@ -3,11 +3,11 @@
 set app_name=AI_OS
 set root=..\dist\%app_name%
 
-echo Preserving Metadata...
-if exist ..\dist\%app_name%\metadata\ (
-    xcopy /Y /E ..\dist\%app_name%\metadata\ metadata\
+echo Preserving data...
+if exist ..\dist\%app_name%\data\ (
+    xcopy /Y /E ..\dist\%app_name%\data\ data\
 ) else (
-    echo No metadata folder found. Skipping copy.
+    echo No data folder found. Skipping copy.
 )
 
 echo Cleaning old build...

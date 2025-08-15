@@ -4,11 +4,11 @@ import queue
 from datetime import datetime
 import textwrap
 
-from Include.metadatadb import MetadataDB
+from Include.usagedata_db import UsagedataDB
 import settings
 
 class SuggestionEngine:
-    def __init__(self, db_handler: MetadataDB):
+    def __init__(self, db_handler: UsagedataDB):
         self.db_handler = db_handler
         self.processed_logs = queue.Queue()
 

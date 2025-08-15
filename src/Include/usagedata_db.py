@@ -5,12 +5,12 @@ from tinydb import TinyDB
 
 import settings
 
-class MetadataDB:
-    def __init__(self, metadata_dir: str):
-        metadata_dir = Path(metadata_dir)
-        metadata_dir.mkdir(parents=True, exist_ok=True)
+class UsagedataDB:
+    def __init__(self, usagedata_dir: str):
+        usagedata_dir = Path(usagedata_dir)
+        usagedata_dir.mkdir(parents=True, exist_ok=True)
 
-        self.db_path: Path = metadata_dir / "metadata.json"
+        self.db_path: Path = usagedata_dir / "usagedata.json"
         self.db: TinyDB = TinyDB(self.db_path)
 
         self.apps_open: dict[str, set[str]] = dict()

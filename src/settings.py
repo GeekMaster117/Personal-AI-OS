@@ -4,7 +4,7 @@ from pathlib import Path
 tick: timedelta = timedelta(seconds=30)
 time_threshold: timedelta = timedelta(minutes=3)
 
-metadata_dir: str = "metadata"
+usagedata_dir: str = "data"
 cuda_dir: str = "bin"
 sys_cache_dir: str = cuda_dir + "/sys_cache.bin"
 

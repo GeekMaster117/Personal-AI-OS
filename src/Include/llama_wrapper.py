@@ -14,7 +14,7 @@ from io import StringIO
 from contextlib import redirect_stderr
 
 from Include.suggestion_engine import SuggestionEngine
-from Include.metadatadb import MetadataDB
+from Include.usagedata_db import UsagedataDB
 
 import settings
 

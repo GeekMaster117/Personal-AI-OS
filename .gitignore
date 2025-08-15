@@ -210,7 +210,7 @@ Scripts/
 pyvenv.cfg
 
 # Data and Models
-metadata/
+data/
 models/
 *.json
 
