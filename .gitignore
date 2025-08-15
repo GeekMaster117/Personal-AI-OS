@@ -209,8 +209,8 @@ __marimo__/
 Scripts/
 pyvenv.cfg
 
+# Data and Models
 metadata/
-dev/
 models/
 
 .vscode/

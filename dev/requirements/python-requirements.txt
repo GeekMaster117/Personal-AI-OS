@@ -1,0 +1,7 @@
+psutil
+pywinctl
+requests
+TinyDB
+pycuda
+pyinstaller
+pypickle
