@@ -212,5 +212,6 @@ pyvenv.cfg
 # Data and Models
 metadata/
 models/
+*.json
 
 .vscode/
