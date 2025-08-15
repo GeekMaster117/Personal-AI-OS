@@ -4,7 +4,7 @@ import queue
 from datetime import datetime
 import textwrap
 
-from Include.core.metadatadb import MetadataDB
+from Include.metadatadb import MetadataDB
 import settings
 
 class SuggestionEngine:

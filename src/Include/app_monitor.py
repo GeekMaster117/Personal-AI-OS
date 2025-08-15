@@ -1,7 +1,7 @@
 import pywinctl
 import psutil
 
-import Include.core.app_title_blacklist as blacklist
+import Include.app_title_blacklist as blacklist
 
 def is_app_blacklisted(app_name: str) -> bool:
     return app_name.lower() in blacklist.app_blacklist

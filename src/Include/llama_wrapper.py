@@ -13,8 +13,8 @@ import time
 from io import StringIO
 from contextlib import redirect_stderr
 
-from Include.core.suggestion_engine import SuggestionEngine
-from Include.core.metadatadb import MetadataDB
+from Include.suggestion_engine import SuggestionEngine
+from Include.metadatadb import MetadataDB
 
 import settings
 

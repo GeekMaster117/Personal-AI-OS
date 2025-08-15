@@ -1,7 +1,7 @@
 import os
 import json
 
-from src.Include.core.llama_wrapper import LlamaCPP
+from src.Include.llama_wrapper import LlamaCPP
 
 class Benchmark:
     test_prompt = "Hello " * 10
