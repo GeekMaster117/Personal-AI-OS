@@ -6,7 +6,7 @@ import settings as settings
 
 from Include.usagedata_db import UsagedataDB
 
-metadata = UsagedataDB(settings.metadata_dir)
+metadata = UsagedataDB(settings.usagedata_dir)
 
 def handle_app_data() -> None:
     active_app_title: tuple[str, str] | None = app_monitor.get_active_app_title()
