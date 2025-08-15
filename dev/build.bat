@@ -34,10 +34,10 @@ xcopy /Y /E ..\requirements\ ..\dist\%app_name%\requirements\
 echo Copying required DLLs...
 xcopy /Y /E ..\bin\ ..\dist\%app_name%\bin\
 
-echo Copying Metadata...
-if exist metadata\ (
-    xcopy /Y /E metadata\ ..\dist\%app_name%\metadata\
-    rmdir /s /q metadata\
+echo Copying Data...
+if exist data\ (
+    xcopy /Y /E data\ ..\dist\%app_name%\data\
+    rmdir /s /q data\
 ) else (
-    echo No metadata folder found. Skipping copy.
+    echo No data folder found. Skipping copy.
 )
