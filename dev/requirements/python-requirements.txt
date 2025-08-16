@@ -1,7 +1,7 @@
 psutil
 pywinctl
 requests
-TinyDB
 pycuda
 pyinstaller
 pypickle
+db-sqlite3
