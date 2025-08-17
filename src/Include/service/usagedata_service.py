@@ -22,11 +22,11 @@ class UsagedataService:
         self._db.execute(query, (time_anchor, monotonic_anchor, monotonic_anchor))
 
     def get_latest_day_log(self, columns: tuple[str] | None = None) -> dict | None:
-        for column in columns:
-            if column not in UsagedataService._day_log_columns:
-                raise ValueError(f"Invalid column name: {column}")
-
-        if not columns:
+        if columns:
+            for column in columns:
+                if column not in UsagedataService._day_log_columns:
+                    raise ValueError(f"Invalid column name: {column}")
+        else:
             columns = UsagedataService._day_log_columns
 
         query = f"SELECT {', '.join(columns)} FROM day_log ORDER BY id DESC LIMIT 1"
