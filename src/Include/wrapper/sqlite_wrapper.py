@@ -26,11 +26,6 @@ class SQLiteWrapper:
             conn.execute("PRAGMA synchronous=NORMAL;")
             conn.execute("PRAGMA foreign_keys=ON;")
 
-    def execute_file(self, file_path: str):
-        with self._get_conn() as conn:
-            with open(file_path, "r") as f:
-                conn.executescript(f.read())
-
     def execute(self, query: str, params: tuple = ()) -> None:
         with self._get_conn() as conn:
             conn.execute(query, params)
