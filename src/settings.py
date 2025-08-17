@@ -7,6 +7,7 @@ time_threshold: timedelta = timedelta(minutes=3)
 usagedata_dir: str = "data"
 sql_dir: str = "sql"
 schema_dir: str = sql_dir + "/schema.sql"
+fetch_all_apps_titles_dir: str = sql_dir + "/fetch_all_apps_titles.sql"
 
 cuda_dir: str = "bin"
 sys_cache_dir: str = cuda_dir + "/sys_cache.bin"
