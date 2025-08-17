@@ -35,6 +35,10 @@ class SQLiteWrapper:
         with self._get_conn() as conn:
             conn.execute(query, params)
 
+    def execute_many(self, query: str, params: list[tuple] = []) -> None:
+        with self._get_conn() as conn:
+            conn.executemany(query, params)
+
     def fetchall(self, query: str, params: tuple = ()) -> list[sqlite3.Row]:
         with self._get_conn() as conn:
             return conn.execute(query, params).fetchall()
