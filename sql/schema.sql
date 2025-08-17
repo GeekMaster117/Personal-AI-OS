@@ -31,7 +31,7 @@ CREATE TABLE IF NOT EXISTS title (
 CREATE TABLE IF NOT EXISTS downtime (
     day_log_id INTEGER NOT NULL,
     day_hour INTEGER NOT NULL CHECK(day_hour BETWEEN 0 AND 23),
-    total_duration REAL DEFAULT 0,
+    total_duration REAL DEFAULT CHECK(day_hour BETWEEN 0 AND 3600),
     PRIMARY KEY(day_log_id, day_hour),
     FOREIGN KEY(day_log_id) REFERENCES day_log(id) ON DELETE CASCADE
 );
@@ -40,7 +40,7 @@ CREATE TABLE IF NOT EXISTS app_focus (
     day_log_id INTEGER NOT NULL,
     app_name TEXT NOT NULL,
     day_hour INTEGER NOT NULL CHECK(day_hour BETWEEN 0 AND 23),
-    total_duration REAL DEFAULT 0,
+    total_duration REAL DEFAULT CHECK(day_hour BETWEEN 0 AND 3600),
     PRIMARY KEY(day_log_id, app_name, day_hour),
     FOREIGN KEY(day_log_id, app_name) REFERENCES app(day_log_id, app_name) ON DELETE CASCADE
 );
@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS title_focus (
     app_name TEXT NOT NULL,
     title_name TEXT NOT NULL,
     day_hour INTEGER NOT NULL CHECK(day_hour BETWEEN 0 AND 23),
-    total_duration REAL DEFAULT 0,
+    total_duration REAL DEFAULT CHECK(day_hour BETWEEN 0 AND 3600),
     PRIMARY KEY(day_log_id, app_name, title_name, day_hour),
     FOREIGN KEY(day_log_id, app_name, title_name) REFERENCES title(day_log_id, app_name, title_name) ON DELETE CASCADE
 );
