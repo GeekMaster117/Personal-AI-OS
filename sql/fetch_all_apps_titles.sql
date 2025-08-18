@@ -3,7 +3,7 @@ WITH latest_day AS (
     FROM day_log 
     ORDER BY id DESC 
     LIMIT 1
-);
+)
 
 SELECT 
     app_log.app_name,
@@ -16,4 +16,4 @@ SELECT
     title_log.total_focus_count AS title_total_focus_count
 FROM app_log
 JOIN latest_day ON app_log.day_log_id = latest_day.id
-LEFT JOIN title_log ON app_log.day_log_id = title_log.day_log_id AND app_log.app_name = title_log.app_name;
+LEFT JOIN title_log ON app_log.day_log_id = title_log.day_log_id AND app_log.app_name = title_log.app_name
