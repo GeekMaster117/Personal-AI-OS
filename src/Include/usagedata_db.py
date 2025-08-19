@@ -99,7 +99,7 @@ class UsagedataDB:
                     downtime_period[last_update_hour] = 0
 
                 last_update_hour_downtime: int = 3600 - (last_update_timestamp.minute * 60 + last_update_timestamp.second)
-                downtime_period[last_update_hour] += last_update_hour_downtime
+                downtime_period[last_update_hour] = min(3600, downtime_period[last_update_hour] + last_update_hour_downtime)
 
                 downtime -= last_update_hour_downtime
 
@@ -107,7 +107,7 @@ class UsagedataDB:
 
             if current_hour not in downtime_period:
                 downtime_period[current_hour] = 0
-            downtime_period[current_hour] += downtime
+            downtime_period[current_hour] = min(3600, downtime_period[current_hour] + downtime)
 
             self.apps_open.clear()
             self.apps_open.update(all_apps)
@@ -137,7 +137,7 @@ class UsagedataDB:
                 }
 
             if active_app in self.apps_open:
-                active_app_focus_period[current_hour]["focus_duration"] += elapsed_time
+                active_app_focus_period[current_hour]["focus_duration"] = min(3600, active_app_focus_period[current_hour]["focus_duration"] + elapsed_time)
                 apps_titles[active_app]["total_focus_duration"] += elapsed_time
 
             if not self.active_app or active_app != self.active_app:
@@ -155,7 +155,7 @@ class UsagedataDB:
                     }
 
                 if active_title in self.apps_open.get(active_app, {}):
-                    active_title_focus_period[current_hour]["focus_duration"] += elapsed_time
+                    active_title_focus_period[current_hour]["focus_duration"] = min(3600, active_title_focus_period[current_hour]["focus_duration"] + elapsed_time)
                     apps_titles[active_app]["titles"][active_title]["total_focus_duration"] += elapsed_time
 
                 if not self.active_title or active_title != self.active_title:
