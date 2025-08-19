@@ -43,12 +43,31 @@ class UsagedataService:
         result = self._db.fetchone(query)
 
         return dict(result) if result else dict()
+    
+    def get_day_log(self, id: int, columns: tuple[str] | None = None) -> dict[str, str | int | float]:
+        if columns:
+            for column in columns:
+                if column not in UsagedataService._day_log_columns:
+                    raise ValueError(f"Invalid column name: {column}")
+        else:
+            columns = UsagedataService._day_log_columns
+
+        query = f"SELECT {', '.join(columns)} FROM day_log WHERE id = ?"
+        result = self._db.fetchone(query, (id,))
+
+        return dict(result) if result else dict()
 
     def get_latest_day_log_id(self) -> int | None:
         query = "SELECT id FROM day_log ORDER BY id DESC LIMIT 1"
         result = self._db.fetchone(query)
 
         return result[0] if result else None
+
+    def get_day_log_ids(self) -> list[int]:
+        query = "SELECT id FROM day_log"
+        result = self._db.fetchall(query)
+
+        return [row[0] for row in result] if result else []
 
     def get_day_log_row_count(self) -> int:
         query = "SELECT COUNT(*) FROM day_log"
@@ -159,7 +178,7 @@ class UsagedataService:
 
         query = f"""
             UPDATE day_log SET {', '.join(columns)}
-            WHERE id = (SELECT id FROM day_log ORDER BY id ASC LIMIT 1);
+            WHERE id = (SELECT id FROM day_log ORDER BY id DESC LIMIT 1);
         """
         self._db.execute(query, values)
 
