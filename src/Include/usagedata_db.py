@@ -209,12 +209,27 @@ class UsagedataDB:
 
         return self._service.get_day_log_ids()
 
-    def get_recent_day_log(self) -> dict[str, dict[str, int | float | dict[str, str | int | float]]]:
+    def get_recent_day_log(self, columns: tuple[str] | None = None) -> dict[str, float | int]:
         self._ensure_log_integrity()
 
-        return self._service.get_latest_day_log_app_log_title_log()
+        return self._service.get_latest_day_log_app_log_title_log(columns)
 
-    def get_day_log(self, doc_id: int) -> dict[str, dict[str, int | float | dict[str, str | int | float]]]:
+    def get_day_log(self, day_log_id: int, columns: tuple[str] | None = None) -> dict[str, float | int]:
         self._ensure_log_integrity()
 
-        return self._service.get_day_log(doc_id)
+        return self._service.get_day_log(day_log_id, columns)
+
+    def get_app_log_title_log(self, day_log_id: int) -> dict[str, dict[str, int | float | dict[str, str | int | float]]]:
+        self._ensure_log_integrity()
+
+        return self._service.get_app_log_title_log(day_log_id)
+    
+    def get_app_focus_period(self, day_log_id: int, app_name: str) -> dict[int, dict[str, float]]:
+        self._ensure_log_integrity()
+
+        return self._service.get_app_focus_period(day_log_id, app_name)
+
+    def get_title_focus_period(self, day_log_id: int, app_name: str, title_name: str) -> dict[int, dict[str, float]]:
+        self._ensure_log_integrity()
+
+        return self._service.get_title_focus_period(day_log_id, app_name, title_name)
