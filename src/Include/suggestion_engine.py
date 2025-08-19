@@ -12,18 +12,20 @@ class SuggestionEngine:
         self.db_handler = db_handler
         self.processed_logs = queue.Queue()
 
-        if self.db_handler.get_log_count() > 1:
-            doc_ids = sorted(self.db_handler.get_document_ids())
+        day_log_ids = self.db_handler.get_day_log_ids()
+        threads = []
 
-            for i in range(len(doc_ids) - 1):
-                self._process_log(doc_ids[i])
+        for i in range(len(day_log_ids)):
+            t = threading.Thread(target=self._process_log, args=(day_log_ids[i],))
+            t.start()
+            threads.append(t)
 
     def _score(self, app_or_title: dict) -> float:
         weight1 = 0.2
         weight2 = 15
 
-        return app_or_title["focus_time"] + (weight1 * app_or_title["total_duration"]) + (weight2 * app_or_title["focus_count"])
-    
+        return app_or_title["total_focus_duration"] + (weight1 * app_or_title["total_duration"]) + (weight2 * app_or_title["total_focus_count"])
+
     def _twelvehour_format(self, hour: int) -> str:
         if hour < 0 or hour > 23:
             raise ValueError("Hour must be between 0 and 23")
@@ -47,38 +49,46 @@ class SuggestionEngine:
         else:
             return f"{round(seconds)} seconds"
 
-    def _preprocess_log(self, log_id: int) -> None:
-        log = self.db_handler.get_log(log_id)
+    def _preprocess_log(self, day_log_id: int) -> None:
+        apps_titles = self.db_handler.get_app_log_title_log(day_log_id)
 
-        top_apps = heapq.nlargest(settings.data_limit, log["apps"].items(), key=lambda x: self._score(x[1]))
-        for app in top_apps:
-            app[1]["titles"] = heapq.nlargest(settings.data_limit, app[1]["titles"].items(), key=lambda x: self._score(x[1]))
+        apps_titles = heapq.nlargest(settings.data_limit, apps_titles.items(), key=lambda x: self._score(x[1]))
 
-        log["apps"] = top_apps
+        #dict gets converted to tuple by heapq.nlargest, so we convert it back to dict
+        apps_titles = dict(apps_titles)
 
-        return log
+        for app_data in apps_titles.values():
+            app_data["titles"] = heapq.nlargest(settings.data_limit, app_data["titles"].items(), key=lambda x: self._score(x[1]))
 
-    def _process_log(self, log_id: int) -> None:
-        log = self._preprocess_log(log_id)
+            #dict gets converted to tuple by heapq.nlargest, so we convert it back to dict
+            app_data["titles"] = dict(app_data["titles"])
+
+        return apps_titles
+
+    def _process_log(self, day_log_id: int) -> None:
+        day_log = self.db_handler.get_day_log(day_log_id, ('time_anchor',))
+        apps_titles = self._preprocess_log(day_log_id)
 
         summary = textwrap.dedent(f"""
-        Date Created: {datetime.fromisoformat(log['time_anchor']).date().isoformat()}
+        Date Created: {datetime.fromisoformat(day_log['time_anchor']).date().isoformat()}
         Top {settings.data_limit} Apps and their Top {settings.data_limit} Titles:""")
 
-        for i, app in enumerate(log["apps"]):
+        for i, (app_name, app_data) in enumerate(apps_titles.items()):
+            app_focus_period = self.db_handler.get_app_focus_period(day_log_id, app_name)
             summary += textwrap.dedent(f""" 
-            {i + 1}. {app[0]}:
-            - Total Focus Duration: {self._round_off(app[1]['focus_time'])}
-            - Total Duration: {self._round_off(app[1]['total_duration'])}
-            - Hourly Focus Duration: [{', '.join(f"{self._twelvehour_format(int(hour))}: {self._round_off(attributes['focus_time'])}" for hour, attributes in app[1]['focus_periods'].items())}]
+            {i + 1}. {app_name}:
+            - Total Focus Duration: {self._round_off(app_data['total_focus_duration'])}
+            - Total Duration: {self._round_off(app_data['total_duration'])}
+            - Hourly Focus Duration: [{', '.join(f"{self._twelvehour_format(int(hour))}: {self._round_off(attributes['focus_duration'])}" for hour, attributes in app_focus_period.items())}]
             """)
 
-            for j, title in enumerate(app[1]["titles"]):
+            for j, (title_name, title_data) in enumerate(app_data["titles"].items()):
+                title_focus_period = self.db_handler.get_title_focus_period(day_log_id, app_name, title_name)
                 summary += textwrap.dedent(f"""
-                - {i + 1}.{j + 1}. {title[0]}:
-                -- Total Focus Duration: {self._round_off(title[1]['focus_time'])}
-                -- Total Duration: {self._round_off(title[1]['total_duration'])}
-                -- Hourly Focus Duration: [{', '.join(f"{self._twelvehour_format(int(hour))}: {self._round_off(attributes['focus_time'])}" for hour, attributes in title[1]['focus_periods'].items())}]
+                - {i + 1}.{j + 1}. {title_name}:
+                -- Total Focus Duration: {self._round_off(title_data['total_focus_duration'])}
+                -- Total Duration: {self._round_off(title_data['total_duration'])}
+                -- Hourly Focus Duration: [{', '.join(f"{self._twelvehour_format(int(hour))}: {self._round_off(attributes['focus_duration'])}" for hour, attributes in title_focus_period.items())}]
                 """)
 
         self.processed_logs.put(summary)
