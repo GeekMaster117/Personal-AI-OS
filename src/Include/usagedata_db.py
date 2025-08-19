@@ -203,31 +203,18 @@ class UsagedataDB:
 
         self._service.upsert_latest_day_log_app_log_title_log(apps_titles)
         self._service.update_latest_day_log(today_log)
-
-    def get_log_count(self) -> int:
-        self._ensure_log_integrity()
-
-        return len(self._service.all())
     
-    def get_document_ids(self) -> list[int]:
+    def get_day_log_ids(self) -> list[int]:
         self._ensure_log_integrity()
 
-        return [doc.doc_id for doc in self._service.all()]
+        return self._service.get_day_log_ids()
 
-    def get_recent_log(self) -> dict[str, dict[str, int | float | dict[str, str | int | float]]]:
+    def get_recent_day_log(self) -> dict[str, dict[str, int | float | dict[str, str | int | float]]]:
         self._ensure_log_integrity()
 
         return self._service.get_latest_day_log_app_log_title_log()
 
-    def get_log(self, doc_id: int) -> dict:
+    def get_day_log(self, doc_id: int) -> dict[str, dict[str, int | float | dict[str, str | int | float]]]:
         self._ensure_log_integrity()
 
-        if doc_id < 0 or doc_id > max([doc.doc_id for doc in self._service.all()]):
-            raise ValueError("doc_id is out of range")
-
-        return self._service.get(doc_id=doc_id)
-
-    def close(self):
-        self._ensure_log_integrity()
-
-        self._service.close()
+        return self._service.get_day_log(doc_id)
