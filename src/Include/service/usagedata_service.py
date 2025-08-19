@@ -253,11 +253,11 @@ class UsagedataService:
                     raise ValueError(f"Invalid column name: {app_column}")
 
             total_duration = app_data.get('total_duration', 0)
-            if total_duration < 0 or total_duration > 3600:
+            if total_duration < 0:
                 raise ValueError(f"Invalid duration: {total_duration}")
 
             total_focus_duration = app_data.get('total_focus_duration', 0)
-            if total_focus_duration < 0 or total_focus_duration > 3600:
+            if total_focus_duration < 0:
                 raise ValueError(f"Invalid duration: {total_focus_duration}")
 
             total_focus_count = app_data.get('total_focus_count', 0)
