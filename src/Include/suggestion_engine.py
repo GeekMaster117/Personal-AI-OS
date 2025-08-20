@@ -10,13 +10,13 @@ import settings
 class SuggestionEngine:
     def __init__(self, db_handler: UsagedataDB):
         self.db_handler = db_handler
-        self.processed_logs = queue.Queue()
+        self.preprocessed_logs = queue.Queue()
 
         day_log_ids = self.db_handler.get_day_log_ids()
         threads = []
 
         for i in range(len(day_log_ids)):
-            t = threading.Thread(target=self._process_log, args=(day_log_ids[i],))
+            t = threading.Thread(target=self._preprocess_log, args=(day_log_ids[i],))
             t.start()
             threads.append(t)
 
@@ -49,7 +49,7 @@ class SuggestionEngine:
         else:
             return f"{round(seconds)} seconds"
 
-    def _preprocess_log(self, day_log_id: int) -> None:
+    def _top_apps_titles(self, day_log_id: int) -> dict[str, dict[str, int | float | dict[str, str | int | float]]]:
         apps_titles = self.db_handler.get_app_log_title_log(day_log_id)
 
         apps_titles = heapq.nlargest(settings.data_limit, apps_titles.items(), key=lambda x: self._score(x[1]))
@@ -65,9 +65,9 @@ class SuggestionEngine:
 
         return apps_titles
 
-    def _process_log(self, day_log_id: int) -> None:
+    def _preprocess_log(self, day_log_id: int) -> None:
         day_log = self.db_handler.get_day_log(day_log_id, ('time_anchor',))
-        apps_titles = self._preprocess_log(day_log_id)
+        apps_titles = self._top_apps_titles(day_log_id)
 
         summary = textwrap.dedent(f"""
         Date Created: {datetime.fromisoformat(day_log['time_anchor']).date().isoformat()}
@@ -91,4 +91,4 @@ class SuggestionEngine:
                 -- Hourly Focus Duration: [{', '.join(f"{self._twelvehour_format(int(hour))}: {self._round_off(attributes['focus_duration'])}" for hour, attributes in title_focus_period.items())}]
                 """)
 
-        self.processed_logs.put(summary)
+        self.preprocessed_logs.put(summary)
