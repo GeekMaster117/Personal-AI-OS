@@ -7,7 +7,7 @@ class LlamaCPPBuilder:
         self.supports_gpu_acceleration = self._check_gpu_acceleration()
         
     def _check_gpu_acceleration(self):
-        if self._check_nvidia_gpu() == 0:
+        if not self._check_nvidia_gpu():
             print("No NVIDIA GPU detected, disabling GPU acceleration.")
             return False
         if not self._check_nvcc():
@@ -94,24 +94,25 @@ class LlamaCPPBuilder:
 
         os.makedirs(build_dir, exist_ok=True)
 
-        architectures = [61]
+        architectures = [61, 75, 86, 89, 120]
 
-        for arch in architectures:
-            print(f"Building for GPU arch {arch}...")
+        if architectures:
+            print(f"Building for GPU arch {', '.join(map(str, architectures))}...")
 
-            if arch != 'CPU':
-                cmake_command = [
+            cmake_command = [
                     "cmake",
                     "-G", '"Visual Studio 17 2022"',
                     "-DLLAMA_BUILD_SHARED_LIBS=on",
                     "-DLLAMA_CUDA=on",
                     "-DLLAMA_CURL=off",
                     "-DCMAKE_BUILD_TYPE=Release",
-                    f"-DCMAKE_CUDA_ARCHITECTURES={arch}",
+                    f"-DCMAKE_CUDA_ARCHITECTURES={';'.join(map(str, architectures))}",
                     ".."
                 ]
-            else:
-                cmake_command = [
+        else:
+            print("Building for CPU...")
+
+            cmake_command = [
                     "cmake",
                     "-G", '"Visual Studio 17 2022"',
                     "-DLLAMA_BUILD_SHARED_LIBS=on",
@@ -120,27 +121,19 @@ class LlamaCPPBuilder:
                     "-DCMAKE_BUILD_TYPE=Release",
                     ".."
                 ]
-            cmake_command = f'"{self.devterminal_dir}" && ' + ' '.join(cmake_command)
-            subprocess.check_call(cmake_command, cwd=build_dir, shell=True)
+                
+        cmake_command = f'"{self.devterminal_dir}" && ' + ' '.join(cmake_command)
+        subprocess.check_call(cmake_command, cwd=build_dir, shell=True)
 
-            build_command = [
-                "cmake", 
-                "--build", 
-                ".", 
-                "--config", 
-                "Release"
-            ]
-            build_command = f'"{self.devterminal_dir}" && ' + ' '.join(build_command)
-            subprocess.check_call(build_command, cwd=build_dir, shell=True)
-
-            main_exe = os.path.join(build_dir, "bin/Release/llama.dll")
-            if os.path.exists(main_exe):
-                new_main = os.path.join(build_dir, f"bin/Release/llama_cuda_{arch}.dll") if arch != 'CPU' else os.path.join(build_dir, "bin/Release/llama_cpu.dll")
-                os.rename(main_exe, new_main)
-                print(f"Built: {new_main}")
-            else:
-                print(f"llama.dll not found for arch {arch}")
-
+        build_command = [
+            "cmake", 
+            "--build", 
+            ".", 
+            "--config", 
+            "Release"
+        ]
+        build_command = f'"{self.devterminal_dir}" && ' + ' '.join(build_command)
+        subprocess.check_call(build_command, cwd=build_dir, shell=True)
 
 llama = LlamaCPPBuilder()
 llama.build_llama_cpp()
