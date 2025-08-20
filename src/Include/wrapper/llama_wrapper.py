@@ -33,8 +33,8 @@ class LlamaCPP:
         ):
         best_device_info = LlamaCPP._get_device_info(gpu_optimal_batchsize, cpu_optimal_batchsize, gpu = gpu_acceleration)
 
-        if best_device_info['arch'] != 'cpu':
-            ctypes.CDLL(LlamaCPP._get_cuda_library(best_device_info['arch']))
+        if best_device_info['arch'] == 'cpu' or best_device_info['arch'] not in settings.supported_arch:
+            ctypes.CDLL(settings.llama_library_dir + "/llama.dll")
 
         import llama_cpp
 
@@ -156,27 +156,6 @@ class LlamaCPP:
             time.sleep(0.1)
         sys.stdout.write('\r \r')
         sys.stdout.flush()
-
-    def _get_supported_arch() -> set[int]:
-        supported_arch: set[int] = set()
-
-        for library in os.listdir(settings.cuda_dir):
-            filename, filetype = library.split('.')
-
-            if filetype != 'dll':
-                continue
-
-            idx = len(filename) - 1
-            while idx >= 0:
-                if filename[idx] == '_':
-                    break
-                idx -= 1
-
-            arch = filename[idx + 1:]
-            if arch.isdigit():
-                supported_arch.add(int(arch))
-
-        return supported_arch
 
     def _get_optimal_config(free_memory, total_layers, gpu_layers, layer_size, kv_cache, activations_token, gpu_optimal_batchsize) -> dict[str, float | int]:
         # VRAM used by layers = (No.of Layers * Size of each Layer) + KV cache per Layer
@@ -308,23 +287,6 @@ class LlamaCPP:
             }
         
         return best_device_info
-            
-    def _get_cuda_library(arch: int) -> str | None:
-        if not arch:
-            print("Unable to detect supported GPU")
-            return
-        
-        supported_arch = LlamaCPP._get_supported_arch()
-        if arch not in supported_arch:
-            print("Unsupported gpu architecture detected")
-            return
-
-        for library in os.listdir(settings.cuda_dir):
-            if library.split('.')[0].split('_')[-1] == str(arch):
-                cuda_library = f"{settings.cuda_dir}/" + library
-                return cuda_library
-
-        print(f"Unable to find library for {arch} architecture")
 
     def chat(self, user_prompt: str, suffix: str) -> None:
         messages = [

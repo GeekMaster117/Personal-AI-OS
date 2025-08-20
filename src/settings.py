@@ -9,14 +9,14 @@ sql_dir: str = "sql"
 schema_dir: str = sql_dir + "/schema.sql"
 fetch_all_apps_titles_dir: str = sql_dir + "/fetch_all_apps_titles.sql"
 
-cuda_dir: str = "bin"
-sys_cache_dir: str = cuda_dir + "/sys_cache.bin"
+llama_library_dir: str = "bin"
+sys_cache_dir: str = llama_library_dir + "/sys_cache.bin"
 model_dir: str = "models/Phi-3-mini-4k-instruct-q4.gguf"
 total_model_layers: int = 32
 model_window_size: int = 4096
 layer_batchsize_weight = 0.5
 
-experimental_model_name: str = "phi3:mini"
+supported_arch = {61, 75, 86, 89, 120}
 
 max_logs: int = 7
 data_limit: int = 3
