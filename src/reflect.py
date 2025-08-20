@@ -1,5 +1,9 @@
 from enum import Enum
 
+from Include.usagedata_db import UsagedataDB
+from Include.suggestion_engine import SuggestionEngine
+import settings
+
 class ExitCodes(Enum):
     EXIT = -1
     CONTINUE = 0
@@ -60,7 +64,6 @@ def handle_suggestions() -> ExitCodes:
                 break
         else:
             print("Invalid option. Please try again.")
-        print("-----------------------------")
 
     return ExitCodes.CONTINUE
 
@@ -87,7 +90,9 @@ def handle_menu() -> None:
                 break
         else:
             print("Invalid option. Please try again.")
-        print("-----------------------------")
-        
+
+usagedataDB = UsagedataDB(settings.usagedata_dir)
+suggestion_engine = SuggestionEngine(usagedataDB)
+
 print("What would you like to do?")
 handle_menu()

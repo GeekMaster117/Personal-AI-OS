@@ -1,5 +1,7 @@
 import os
 import json
+import threading
+import sys
 
 from Include.wrapper.llama_wrapper import LlamaCPP
 
@@ -22,7 +24,28 @@ class SuggestionEngineService:
                     raise ValueError("gpu_optimal_batchsize must be an integer.")
             except:
                 raise ValueError("cpu_optimal_batchsize and gpu_optimal_batchsize not found in the configuration file. Please run the benchmark.")
+        
+        self._llama: LlamaCPP | None = None
+        self._llama_ready: threading.Event = threading.Event()
 
-        self.llama = LlamaCPP(cpu_optimal_batchsize, gpu_optimal_batchsize)
+        thread = threading.Thread(target=self._initialize_llama, args=(cpu_optimal_batchsize, gpu_optimal_batchsize), daemon=True)
+        thread.start()
 
-test = SuggestionEngineService()
+    def _initialize_llama(self, cpu_optimal_batchsize: int, gpu_optimal_batchsize: int):
+        class MainOnlyStdout:
+            def write(self, text):
+                current = threading.current_thread()
+                if not current.daemon:
+                    sys.__stdout__.write(text)
+
+            def flush(self):
+                current = threading.current_thread()
+                if not current.daemon:
+                    sys.__stdout__.flush()
+
+        original_stdout = sys.stdout
+        sys.stdout = MainOnlyStdout()
+
+        self._llama = LlamaCPP(cpu_optimal_batchsize, gpu_optimal_batchsize)
+
+        self._llama_ready.set()

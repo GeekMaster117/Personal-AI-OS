@@ -5,20 +5,23 @@ from datetime import datetime
 import textwrap
 
 from Include.usagedata_db import UsagedataDB
+from Include.service.suggestion_engine_service import SuggestionEngineService
 import settings
 
 class SuggestionEngine:
     def __init__(self, db_handler: UsagedataDB):
-        self.db_handler = db_handler
+        self._service = SuggestionEngineService()
+
+        self._db_handler = db_handler
         self.preprocessed_logs = queue.Queue()
 
-        day_log_ids = self.db_handler.get_day_log_ids()
+        day_log_ids = self._db_handler.get_day_log_ids()
         threads = []
 
         for i in range(len(day_log_ids)):
-            t = threading.Thread(target=self._preprocess_log, args=(day_log_ids[i],))
-            t.start()
-            threads.append(t)
+            thread = threading.Thread(target=self._preprocess_log, args=(day_log_ids[i],), daemon=True)
+            thread.start()
+            threads.append(thread)
 
     def _score(self, app_or_title: dict) -> float:
         weight1 = 0.2
@@ -50,7 +53,7 @@ class SuggestionEngine:
             return f"{round(seconds)} seconds"
 
     def _top_apps_titles(self, day_log_id: int) -> dict[str, dict[str, int | float | dict[str, str | int | float]]]:
-        apps_titles = self.db_handler.get_app_log_title_log(day_log_id)
+        apps_titles = self._db_handler.get_app_log_title_log(day_log_id)
 
         apps_titles = heapq.nlargest(settings.data_limit, apps_titles.items(), key=lambda x: self._score(x[1]))
 
@@ -66,7 +69,7 @@ class SuggestionEngine:
         return apps_titles
 
     def _preprocess_log(self, day_log_id: int) -> None:
-        day_log = self.db_handler.get_day_log(day_log_id, ('time_anchor',))
+        day_log = self._db_handler.get_day_log(day_log_id, ('time_anchor',))
         apps_titles = self._top_apps_titles(day_log_id)
 
         summary = textwrap.dedent(f"""
@@ -74,7 +77,7 @@ class SuggestionEngine:
         Top {settings.data_limit} Apps and their Top {settings.data_limit} Titles:""")
 
         for i, (app_name, app_data) in enumerate(apps_titles.items()):
-            app_focus_period = self.db_handler.get_app_focus_period(day_log_id, app_name)
+            app_focus_period = self._db_handler.get_app_focus_period(day_log_id, app_name)
             summary += textwrap.dedent(f""" 
             {i + 1}. {app_name}:
             - Total Focus Duration: {self._round_off(app_data['total_focus_duration'])}
@@ -83,7 +86,7 @@ class SuggestionEngine:
             """)
 
             for j, (title_name, title_data) in enumerate(app_data["titles"].items()):
-                title_focus_period = self.db_handler.get_title_focus_period(day_log_id, app_name, title_name)
+                title_focus_period = self._db_handler.get_title_focus_period(day_log_id, app_name, title_name)
                 summary += textwrap.dedent(f"""
                 - {i + 1}.{j + 1}. {title_name}:
                 -- Total Focus Duration: {self._round_off(title_data['total_focus_duration'])}
