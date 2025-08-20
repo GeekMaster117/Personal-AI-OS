@@ -43,6 +43,19 @@ class UsagedataService:
         result = self._db.fetchone(query)
 
         return dict(result) if result else dict()
+    
+    def get_day_log(self, id: int, columns: tuple[str] | None = None) -> dict[str, str | int | float]:
+        if columns:
+            for column in columns:
+                if column not in UsagedataService._day_log_columns:
+                    raise ValueError(f"Invalid column name: {column}")
+        else:
+            columns = UsagedataService._day_log_columns
+
+        query = f"SELECT {', '.join(columns)} FROM day_log WHERE id = ?"
+        result = self._db.fetchone(query, (id,))
+
+        return dict(result) if result else dict()
 
     def get_latest_day_log_id(self) -> int | None:
         query = "SELECT id FROM day_log ORDER BY id DESC LIMIT 1"
@@ -50,14 +63,37 @@ class UsagedataService:
 
         return result[0] if result else None
 
+    def get_day_log_ids(self) -> list[int]:
+        query = "SELECT id FROM day_log"
+        result = self._db.fetchall(query)
+
+        return [row[0] for row in result] if result else []
+
     def get_day_log_row_count(self) -> int:
         query = "SELECT COUNT(*) FROM day_log"
         result = self._db.fetchone(query)
 
         return result[0] if result else 0
+    
+    def get_app_log_title_log(self, day_log_id: int) -> dict[str, dict[str, int | float | dict[str, str | int | float]]]:
+        query = """
+            SELECT 
+                app_log.app_name,
+                app_log.total_duration AS app_total_duration,
+                app_log.total_focus_duration AS app_total_focus_duration,
+                app_log.total_focus_count AS app_total_focus_count,
+                title_log.title_name,
+                title_log.total_duration AS title_total_duration,
+                title_log.total_focus_duration AS title_total_focus_duration,
+                title_log.total_focus_count AS title_total_focus_count
+            FROM app_log
+            LEFT JOIN title_log 
+                ON app_log.day_log_id = title_log.day_log_id 
+            AND app_log.app_name = title_log.app_name
+            WHERE app_log.day_log_id = ?
+        """
 
-    def get_latest_day_log_app_log_title_log(self) -> dict[str, dict[str, int | float | dict[str, str | int | float]]]:
-        result = self._db.fetch_script(settings.fetch_all_apps_titles_dir)
+        result = self._db.fetchall(query, (day_log_id,))
         
         if not result:
             return dict()
@@ -79,6 +115,13 @@ class UsagedataService:
             }
 
         return apps_titles
+
+    def get_latest_day_log_app_log_title_log(self) -> dict[str, dict[str, int | float | dict[str, str | int | float]]]:
+        latest_day_log_id = self.get_latest_day_log_id()
+        if not latest_day_log_id:
+            return dict()
+        
+        return self.get_app_log_title_log(latest_day_log_id)
 
     def latest_day_log_app_log_name_exists(self, app_name: str) -> bool:
         latest_day_log_id = self.get_latest_day_log_id()
@@ -119,16 +162,28 @@ class UsagedataService:
 
         return {row[0]: row[1] for row in result} if result else dict()
 
+    def get_app_focus_period(self, day_log_id: int, app_name: str) -> dict[int, dict[str, float]]:
+        query = """
+            SELECT day_hour, focus_duration, focus_count FROM app_focus_period
+            WHERE day_log_id = ? AND app_name = ?
+        """
+        result = self._db.fetchall(query, (day_log_id, app_name))
+
+        return {row[0]: {'focus_duration': row[1], 'focus_count': row[2]} for row in result} if result else dict()
+
     def get_latest_day_log_app_focus_period(self, app_name: str) -> dict[int, dict[str, int | float]]:
         latest_day_log_id = self.get_latest_day_log_id()
         if not latest_day_log_id:
             return dict()
 
+        return self.get_app_focus_period(latest_day_log_id, app_name)
+    
+    def get_title_focus_period(self, day_log_id: int, app_name: str, title_name: str) -> dict[int, dict[str, float]]:
         query = """
-            SELECT day_hour, focus_duration, focus_count FROM app_focus_period
-            WHERE day_log_id = ? AND app_name = ?
+            SELECT day_hour, focus_duration, focus_count FROM title_focus_period
+            WHERE day_log_id = ? AND app_name = ? AND title_name = ?
         """
-        result = self._db.fetchall(query, (latest_day_log_id, app_name))
+        result = self._db.fetchall(query, (day_log_id, app_name, title_name))
 
         return {row[0]: {'focus_duration': row[1], 'focus_count': row[2]} for row in result} if result else dict()
 
@@ -137,13 +192,7 @@ class UsagedataService:
         if not latest_day_log_id:
             return dict()
 
-        query = """
-            SELECT day_hour, focus_duration, focus_count FROM title_focus_period
-            WHERE day_log_id = ? AND app_name = ? AND title_name = ?
-        """
-        result = self._db.fetchall(query, (latest_day_log_id, app_name, title_name))
-
-        return {row[0]: {'focus_duration': row[1], 'focus_count': row[2]} for row in result} if result else dict()
+        return self.get_title_focus_period(latest_day_log_id, app_name, title_name)
 
     def update_latest_day_log(self, column_values: dict[str, float | int]) -> None:
         if not column_values:
@@ -159,7 +208,7 @@ class UsagedataService:
 
         query = f"""
             UPDATE day_log SET {', '.join(columns)}
-            WHERE id = (SELECT id FROM day_log ORDER BY id ASC LIMIT 1);
+            WHERE id = (SELECT id FROM day_log ORDER BY id DESC LIMIT 1);
         """
         self._db.execute(query, values)
 
@@ -204,11 +253,11 @@ class UsagedataService:
                     raise ValueError(f"Invalid column name: {app_column}")
 
             total_duration = app_data.get('total_duration', 0)
-            if total_duration < 0 or total_duration > 3600:
+            if total_duration < 0:
                 raise ValueError(f"Invalid duration: {total_duration}")
 
             total_focus_duration = app_data.get('total_focus_duration', 0)
-            if total_focus_duration < 0 or total_focus_duration > 3600:
+            if total_focus_duration < 0:
                 raise ValueError(f"Invalid duration: {total_focus_duration}")
 
             total_focus_count = app_data.get('total_focus_count', 0)

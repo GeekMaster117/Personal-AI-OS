@@ -1,4 +1,5 @@
 import time
+import signal
 from pathlib import Path
 
 import Include.app_monitor as app_monitor
@@ -6,16 +7,32 @@ import settings as settings
 
 from Include.usagedata_db import UsagedataDB
 
-metadata = UsagedataDB(settings.usagedata_dir)
+shutdown_request: bool = False
+
+def shutdown_handler(signum, frame) -> None:
+    global shutdown_request
+    print("Shutting down...", flush=True)
+    shutdown_request = True
 
 def handle_app_data() -> None:
     active_app_title: tuple[str, str] | None = app_monitor.get_active_app_title()
     active_app, active_title = active_app_title
     app_data: dict[str, set[str]] = app_monitor.get_all_apps()
 
-    metadata.update_apps(app_data, active_app, active_title)
+    usagedataDB.update_apps(app_data, active_app, active_title)
 
-while True:
+usagedataDB = UsagedataDB(settings.usagedata_dir)
+signal.signal(signal.SIGINT, shutdown_handler)
+signal.signal(signal.SIGTERM, shutdown_handler)
+
+sleep_interval = 1
+
+print("Press Ctrl+C to stop")
+
+while not shutdown_request:
     handle_app_data()
 
-    time.sleep(settings.tick.total_seconds())
+    elapsed_time = 0
+    while elapsed_time < settings.tick.total_seconds() and not shutdown_request:
+        time.sleep(sleep_interval)
+        elapsed_time += sleep_interval

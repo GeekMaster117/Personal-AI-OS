@@ -99,7 +99,7 @@ class UsagedataDB:
                     downtime_period[last_update_hour] = 0
 
                 last_update_hour_downtime: int = 3600 - (last_update_timestamp.minute * 60 + last_update_timestamp.second)
-                downtime_period[last_update_hour] += last_update_hour_downtime
+                downtime_period[last_update_hour] = min(3600, downtime_period[last_update_hour] + last_update_hour_downtime)
 
                 downtime -= last_update_hour_downtime
 
@@ -107,7 +107,7 @@ class UsagedataDB:
 
             if current_hour not in downtime_period:
                 downtime_period[current_hour] = 0
-            downtime_period[current_hour] += downtime
+            downtime_period[current_hour] = min(3600, downtime_period[current_hour] + downtime)
 
             self.apps_open.clear()
             self.apps_open.update(all_apps)
@@ -137,7 +137,7 @@ class UsagedataDB:
                 }
 
             if active_app in self.apps_open:
-                active_app_focus_period[current_hour]["focus_duration"] += elapsed_time
+                active_app_focus_period[current_hour]["focus_duration"] = min(3600, active_app_focus_period[current_hour]["focus_duration"] + elapsed_time)
                 apps_titles[active_app]["total_focus_duration"] += elapsed_time
 
             if not self.active_app or active_app != self.active_app:
@@ -155,7 +155,7 @@ class UsagedataDB:
                     }
 
                 if active_title in self.apps_open.get(active_app, {}):
-                    active_title_focus_period[current_hour]["focus_duration"] += elapsed_time
+                    active_title_focus_period[current_hour]["focus_duration"] = min(3600, active_title_focus_period[current_hour]["focus_duration"] + elapsed_time)
                     apps_titles[active_app]["titles"][active_title]["total_focus_duration"] += elapsed_time
 
                 if not self.active_title or active_title != self.active_title:
@@ -203,31 +203,33 @@ class UsagedataDB:
 
         self._service.upsert_latest_day_log_app_log_title_log(apps_titles)
         self._service.update_latest_day_log(today_log)
-
-    def get_log_count(self) -> int:
-        self._ensure_log_integrity()
-
-        return len(self._service.all())
     
-    def get_document_ids(self) -> list[int]:
+    def get_day_log_ids(self) -> list[int]:
         self._ensure_log_integrity()
 
-        return [doc.doc_id for doc in self._service.all()]
+        return self._service.get_day_log_ids()
 
-    def get_recent_log(self) -> dict[str, dict[str, int | float | dict[str, str | int | float]]]:
+    def get_recent_day_log(self, columns: tuple[str] | None = None) -> dict[str, float | int]:
         self._ensure_log_integrity()
 
-        return self._service.get_latest_day_log_app_log_title_log()
+        return self._service.get_latest_day_log_app_log_title_log(columns)
 
-    def get_log(self, doc_id: int) -> dict:
+    def get_day_log(self, day_log_id: int, columns: tuple[str] | None = None) -> dict[str, float | int]:
         self._ensure_log_integrity()
 
-        if doc_id < 0 or doc_id > max([doc.doc_id for doc in self._service.all()]):
-            raise ValueError("doc_id is out of range")
+        return self._service.get_day_log(day_log_id, columns)
 
-        return self._service.get(doc_id=doc_id)
-
-    def close(self):
+    def get_app_log_title_log(self, day_log_id: int) -> dict[str, dict[str, int | float | dict[str, str | int | float]]]:
         self._ensure_log_integrity()
 
-        self._service.close()
+        return self._service.get_app_log_title_log(day_log_id)
+    
+    def get_app_focus_period(self, day_log_id: int, app_name: str) -> dict[int, dict[str, float]]:
+        self._ensure_log_integrity()
+
+        return self._service.get_app_focus_period(day_log_id, app_name)
+
+    def get_title_focus_period(self, day_log_id: int, app_name: str, title_name: str) -> dict[int, dict[str, float]]:
+        self._ensure_log_integrity()
+
+        return self._service.get_title_focus_period(day_log_id, app_name, title_name)
