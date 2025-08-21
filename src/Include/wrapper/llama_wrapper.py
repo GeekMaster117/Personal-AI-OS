@@ -13,9 +13,6 @@ import time
 from io import StringIO
 from contextlib import redirect_stderr
 
-from Include.suggestion_engine import SuggestionEngine
-from Include.usagedata_db import UsagedataDB
-
 import settings
 
 class LlamaCPP:
@@ -33,7 +30,7 @@ class LlamaCPP:
         ):
         best_device_info = LlamaCPP._get_device_info(gpu_optimal_batchsize, cpu_optimal_batchsize, gpu = gpu_acceleration)
 
-        if best_device_info['arch'] == 'cpu' or best_device_info['arch'] not in settings.supported_arch:
+        if best_device_info['arch'] in settings.supported_arch:
             ctypes.CDLL(settings.llama_library_dir + "/llama.dll")
 
         import llama_cpp
@@ -326,22 +323,3 @@ class LlamaCPP:
     
     def supports_gpu_acceleration() -> bool:
         return cuda.Device.count() != 0
-
-# llama = LlamaCPP()
-
-# db_handler = MetadataDB(settings.metadata_dir)
-# suggestion_engine = SuggestionEngine(db_handler)
-
-# def get_suffix() -> str:
-#     return textwrap.dedent(f"""
-#         Use this data to generate suggestions
-#         {suggestion_engine.processed_logs.get()}
-#     """)
-
-# while True:
-#     user_input = input("You: ")
-#     if user_input.lower() in ['exit', 'quit', 'stop']:
-#         print("Exiting conversation...", flush=True)
-#         break
-
-#     llama.chat(user_input, get_suffix())
