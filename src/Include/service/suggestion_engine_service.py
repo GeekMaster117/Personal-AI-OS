@@ -49,3 +49,7 @@ class SuggestionEngineService:
         self._llama = LlamaCPP(cpu_optimal_batchsize, gpu_optimal_batchsize)
 
         self._llama_ready.set()
+
+    def __del__(self):
+        if self._llama:
+            del self._llama
