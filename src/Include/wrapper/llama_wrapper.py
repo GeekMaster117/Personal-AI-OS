@@ -4,16 +4,14 @@ import ctypes
 import os
 import psutil
 import threading
-import sys
 import time
-import itertools
 import textwrap
 import pickle
-import time
 from io import StringIO
 from contextlib import redirect_stderr
 
 import settings
+from Include.loading_spinner import loading_spinner
 
 class LlamaCPP:
     def __init__(self,
@@ -26,16 +24,18 @@ class LlamaCPP:
             gpu_layers: int | None = None,
             batch_size: int | None = None,
             gpu_acceleration: bool = True, 
-            cache: bool = True
+            cache: bool = True,
+            debug: bool = False
         ):
-        best_device_info = LlamaCPP._get_device_info(gpu_optimal_batchsize, cpu_optimal_batchsize, gpu = gpu_acceleration)
+        self.debug = debug
+        best_device_info = self._get_device_info(gpu_optimal_batchsize, cpu_optimal_batchsize, gpu = gpu_acceleration)
 
         if best_device_info['arch'] in settings.supported_arch:
             ctypes.CDLL(settings.llama_library_dir + "/llama.dll")
 
         import llama_cpp
 
-        print("Initialising LLM...", flush=True)
+        self.debug and print("Initialising LLM...", flush=True)
         with redirect_stderr(redirect_stderr(StringIO)):
             self.llm = llama_cpp.Llama(
                 model_path = model_path if model_path else settings.model_dir,
@@ -65,14 +65,14 @@ class LlamaCPP:
 
     def _handle_sys_cache(self) -> None:
         if os.path.exists(settings.sys_cache_dir):
-            print('Loading Cache...', flush=True)
+            self.debug and print('Loading Cache...', flush=True)
             try:
                 self._load_sys_cache()
                 return
             except:
-                print('Cache incompatibility detected, Will try caching again.')
+                self.debug and print('Cache incompatibility detected, Will try caching again.')
         
-        print('Caching for future use...', flush=True)
+        self.debug and print('Caching for future use...', flush=True)
         self._save_sys_cache()
         self._load_sys_cache()
     
@@ -144,15 +144,26 @@ class LlamaCPP:
 
             You are not just analyzing — you are mentoring gently, like a productivity coach fused into an OS.
         """)
+    
+    def _get_device_info(self, gpu_optimal_batchsize: int, cpu_optimal_batchsize: int, gpu: bool = True) -> dict[str, str | int]:
+        best_device_info = None
+        if gpu:
+            self.debug and print("Checking support for GPU accleration...", flush=True)
+            best_device_info = LlamaCPP._get_gpu_info(gpu_optimal_batchsize)
 
-    def _loading_spinner(self, loading_message, flag):
-        spinner = itertools.cycle(['|', '/', '-', '\\'])
-        while flag['running']:
-            sys.stdout.write(f"\r{loading_message}... {next(spinner)}")
-            sys.stdout.flush()
-            time.sleep(0.1)
-        sys.stdout.write('\r \r')
-        sys.stdout.flush()
+        if not best_device_info:
+            self.debug and print("Skipping GPU acceleration.")
+            memory = psutil.virtual_memory()
+            best_device_info = {
+                'idx': -1,
+                'free_mem': memory.free / (1024 ** 2),
+                'total_mem': memory.total / (1024 ** 2),
+                'arch': 'cpu',
+                'gpu_layers': 0,
+                'batch_size': cpu_optimal_batchsize
+            }
+        
+        return best_device_info
 
     def _get_optimal_config(free_memory, total_layers, gpu_layers, layer_size, kv_cache, activations_token, gpu_optimal_batchsize) -> dict[str, float | int]:
         # VRAM used by layers = (No.of Layers * Size of each Layer) + KV cache per Layer
@@ -264,26 +275,6 @@ class LlamaCPP:
             return best_device_info
         except:
             return
-        
-    def _get_device_info(gpu_optimal_batchsize: int, cpu_optimal_batchsize: int, gpu: bool = True) -> dict[str, str | int]:
-        best_device_info = None
-        if gpu:
-            print("Checking support for GPU accleration...", flush=True)
-            best_device_info = LlamaCPP._get_gpu_info(gpu_optimal_batchsize)
-
-        if not best_device_info:
-            print("Skipping GPU acceleration.")
-            memory = psutil.virtual_memory()
-            best_device_info = {
-                'idx': -1,
-                'free_mem': memory.free / (1024 ** 2),
-                'total_mem': memory.total / (1024 ** 2),
-                'arch': 'cpu',
-                'gpu_layers': 0,
-                'batch_size': cpu_optimal_batchsize
-            }
-        
-        return best_device_info
 
     def chat(self, user_prompt: str, suffix: str) -> None:
         messages = [
@@ -292,8 +283,9 @@ class LlamaCPP:
 
         spinner_flag = {'running': True}
         spinner_thread = threading.Thread(
-            target = self._loading_spinner,
-            args = ("Thinking", spinner_flag,)
+            target = loading_spinner,
+            args = ("Thinking", spinner_flag),
+            daemon = True
         )
         spinner_thread.start()
 
@@ -303,12 +295,12 @@ class LlamaCPP:
                 spinner_flag['running'] = False
                 spinner_thread.join()
                 first_chunk = False
-                print("LLM: ", end='', flush=True)
+                self.debug and print("LLM: ", end='', flush=True)
 
             delta = chunk["choices"][0]["delta"]
             content = delta.get("content", "")
-            print(content, end='', flush=True)
-        print("\n")
+            self.debug and print(content, end='', flush=True)
+        self.debug and print("\n")
 
     def run_inference(self, test_prompt: str, max_tokens: int) -> int:
         start = time.monotonic()
