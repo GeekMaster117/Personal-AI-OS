@@ -1,9 +1,8 @@
 import threading
 import heapq
-import queue
-from datetime import datetime
-import time
 import textwrap
+from enum import Enum
+from datetime import datetime
 
 from Include.usagedata_db import UsagedataDB
 from Include.service.suggestion_engine_service import SuggestionEngineService
@@ -11,6 +10,12 @@ from Include.loading_spinner import loading_spinner
 import settings
 
 class SuggestionEngine:
+    class SuggestionType(Enum):
+        ROUTINE = "routine"
+        PRODUCTIVITY = "productivity"
+        PERSONAL = "personal"
+        PROFESSIONAL = "professional"
+
     def __init__(self, db_handler: UsagedataDB):
         try:
             self._service = SuggestionEngineService()
@@ -18,7 +23,8 @@ class SuggestionEngine:
             raise RuntimeError(f"Error initializing SuggestionEngineService: {e}")
 
         self._db_handler: UsagedataDB = db_handler
-        self.preprocessed_logs: queue.Queue = queue.Queue()
+        self._day_log_ids: list[int] = self._db_handler.get_day_log_ids()
+        self.preprocessed_logs: dict[int, str] = dict()
 
         self.preprocess_threads: list[threading.Thread] = []
 
@@ -93,16 +99,14 @@ class SuggestionEngine:
                 -- Hourly Focus Duration: [{', '.join(f"{self._twelvehour_format(int(hour))}: {self._round_off(attributes['focus_duration'])}" for hour, attributes in title_focus_period.items())}]
                 """)
 
-        self.preprocessed_logs.put(summary)
+        self.preprocessed_logs[day_log_id] = summary
 
     def close(self):
         self._service.close()
 
     def preprocess_logs(self) -> None:
-        day_log_ids: list[int] = self._db_handler.get_day_log_ids()
-
-        for i in range(len(day_log_ids)):
-            thread: threading.Thread = threading.Thread(target=self._preprocess_log, args=(day_log_ids[i],), daemon=True)
+        for day_log_id in self._day_log_ids:
+            thread: threading.Thread = threading.Thread(target=self._preprocess_log, args=(day_log_id,), daemon=True)
             thread.start()
             self.preprocess_threads.append(thread)
 
@@ -123,3 +127,11 @@ class SuggestionEngine:
 
         spinner_flag["running"] = False
         spinner_thread.join()
+
+    def generate_suggestions(self, suggestion_type: SuggestionType) -> None:
+        latest_day_log_id = max(self._day_log_ids)
+        if latest_day_log_id not in self.preprocessed_logs:
+            raise RuntimeError("Latest day log not preprocessed yet.")
+        latest_day_log = self.preprocessed_logs[latest_day_log_id]
+
+        self._service.chat(f"Give me {suggestion_type.value} suggestions based on this data {latest_day_log}")

@@ -38,7 +38,10 @@ def handle_routine_suggestions() -> ExitCodes:
         print(f"Error handling routine suggestions: {e}")
         return ExitCodes.EXIT
 
-    print("Routine suggestions are not yet implemented.")
+    suggestion_engine.generate_suggestions(SuggestionEngine.SuggestionType.ROUTINE)
+
+    print("-----------------------------")
+
     return ExitCodes.CONTINUE
 
 def handle_productivity_suggestions() -> ExitCodes:
@@ -48,7 +51,10 @@ def handle_productivity_suggestions() -> ExitCodes:
         print(f"Error handling productivity suggestions: {e}")
         return ExitCodes.EXIT
 
-    print("Productivity suggestions are not yet implemented.")
+    suggestion_engine.generate_suggestions(SuggestionEngine.SuggestionType.PRODUCTIVITY)
+
+    print("-----------------------------")
+
     return ExitCodes.CONTINUE
 
 def handle_personal_suggestions() -> ExitCodes:
@@ -58,7 +64,10 @@ def handle_personal_suggestions() -> ExitCodes:
         print(f"Error handling personal suggestions: {e}")
         return ExitCodes.EXIT
 
-    print("Personal suggestions are not yet implemented.")
+    suggestion_engine.generate_suggestions(SuggestionEngine.SuggestionType.PERSONAL)
+
+    print("-----------------------------")
+
     return ExitCodes.CONTINUE
 
 def handle_professional_suggestions() -> ExitCodes:
@@ -68,7 +77,10 @@ def handle_professional_suggestions() -> ExitCodes:
         print(f"Error handling professional suggestions: {e}")
         return ExitCodes.EXIT
 
-    print("Professional suggestions are not yet implemented.")
+    suggestion_engine.generate_suggestions(SuggestionEngine.SuggestionType.PROFESSIONAL)
+
+    print("-----------------------------")
+
     return ExitCodes.CONTINUE
 
 # Suggestions handler
