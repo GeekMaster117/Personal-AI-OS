@@ -28,9 +28,9 @@ class SuggestionEngineService:
             except:
                 raise ValueError("cpu_optimal_batchsize and gpu_optimal_batchsize not found in the configuration file. Please run the benchmark.")
 
-        self._initialize_llama(cpu_optimal_batchsize, gpu_optimal_batchsize)
+        self._llama = self._initialize_llama(cpu_optimal_batchsize, gpu_optimal_batchsize)
 
-    def _initialize_llama(self, cpu_optimal_batchsize: int, gpu_optimal_batchsize: int):
+    def _initialize_llama(self, cpu_optimal_batchsize: int, gpu_optimal_batchsize: int) -> LlamaCPP:
         spinner_flag = {"running": True}
         spinner_thread = threading.Thread(
             target = loading_spinner, 
@@ -40,13 +40,15 @@ class SuggestionEngineService:
         spinner_thread.start()
 
         try:
-            self._llama = LlamaCPP(cpu_optimal_batchsize, gpu_optimal_batchsize)
-            self._llama.handle_sys_cache(self._get_system_prompt(), "suggestions_sys_cache")
+            llama = LlamaCPP(cpu_optimal_batchsize, gpu_optimal_batchsize)
+            llama.handle_sys_cache(self._get_system_prompt(), "suggestions_sys_cache")
         except Exception as e:
             raise RuntimeError(f"Error initializing LlamaCPP: {e}")
 
         spinner_flag["running"] = False
         spinner_thread.join()
+
+        return llama
 
     def _get_system_prompt(self) -> str:
         return textwrap.dedent(f"""
@@ -118,10 +120,7 @@ class SuggestionEngineService:
         """)
 
     def close(self):
-        if self._llama:
-            del self._llama
+        del self._llama
 
     def chat(self, user_prompt: str) -> None:
-        if not self._llama:
-            raise RuntimeError("Llama model is not initialized.")
         self._llama.chat(user_prompt)

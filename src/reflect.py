@@ -24,39 +24,49 @@ def handle_options(options: list[str]) -> int:
         return int(choice) - 1
     return -1
 
-def wait_until_preprocessed_logs() -> ExitCodes:
+def wait_until_preprocessed_logs() -> None:
     try:
         suggestion_engine.wait_until_preprocessed_logs()
-        return ExitCodes.CONTINUE
     except Exception as e:
-        print(f"Error waiting for preprocessed logs: {e}")
-        return ExitCodes.EXIT
+        raise RuntimeError(f"Error waiting for preprocessed logs: {e}")
 
 # Suggestion Categories Handlers
 def handle_routine_suggestions() -> ExitCodes:
-    if wait_until_preprocessed_logs() == ExitCodes.EXIT:
-        return ExitCodes.CONTINUE
+    try:
+        wait_until_preprocessed_logs()
+    except Exception as e:
+        print(f"Error handling routine suggestions: {e}")
+        return ExitCodes.EXIT
 
     print("Routine suggestions are not yet implemented.")
     return ExitCodes.CONTINUE
 
 def handle_productivity_suggestions() -> ExitCodes:
-    if wait_until_preprocessed_logs() == ExitCodes.EXIT:
-        return ExitCodes.CONTINUE
+    try:
+        wait_until_preprocessed_logs()
+    except Exception as e:
+        print(f"Error handling productivity suggestions: {e}")
+        return ExitCodes.EXIT
 
     print("Productivity suggestions are not yet implemented.")
     return ExitCodes.CONTINUE
 
 def handle_personal_suggestions() -> ExitCodes:
-    if wait_until_preprocessed_logs() == ExitCodes.EXIT:
-        return ExitCodes.CONTINUE
+    try:
+        wait_until_preprocessed_logs()
+    except Exception as e:
+        print(f"Error handling personal suggestions: {e}")
+        return ExitCodes.EXIT
 
     print("Personal suggestions are not yet implemented.")
     return ExitCodes.CONTINUE
 
 def handle_professional_suggestions() -> ExitCodes:
-    if wait_until_preprocessed_logs() == ExitCodes.EXIT:
-        return ExitCodes.CONTINUE
+    try:
+        wait_until_preprocessed_logs()
+    except Exception as e:
+        print(f"Error handling professional suggestions: {e}")
+        return ExitCodes.EXIT
 
     print("Professional suggestions are not yet implemented.")
     return ExitCodes.CONTINUE
@@ -117,6 +127,7 @@ try:
 except Exception as e:
     print(f"\nError initialising Suggestion Engine: {e}")
     exit(1)
+
 suggestion_engine.preprocess_logs()
 
 print("What would you like to do?")
