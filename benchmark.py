@@ -6,7 +6,7 @@ from src.Include.wrapper.llama_wrapper import LlamaCPP
 class Benchmark:
     test_prompt = "Hello " * 10
     max_tokens = 50
-    batch_sizes = [4, 6, 8, 16, 32, 64]
+    batch_sizes = [4, 8, 16, 32, 64, 128]
 
     def _save_config(key, value):
         if os.path.exists('device_config.json'):
