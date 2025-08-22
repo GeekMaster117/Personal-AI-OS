@@ -10,8 +10,9 @@ schema_dir: str = sql_dir + "/schema.sql"
 fetch_all_apps_titles_dir: str = sql_dir + "/fetch_all_apps_titles.sql"
 
 llama_library_dir: str = "bin"
-sys_cache_dir: str = llama_library_dir + "/sys_cache.bin"
+cache_dir: str = "cache"
 model_dir: str = "models/Phi-3-mini-4k-instruct-q4.gguf"
+
 total_model_layers: int = 32
 model_window_size: int = 4096
 layer_batchsize_weight = 0.5
