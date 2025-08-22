@@ -12,18 +12,15 @@ import settings
 
 class SuggestionEngine:
     def __init__(self, db_handler: UsagedataDB):
-        self._service = SuggestionEngineService()
+        try:
+            self._service = SuggestionEngineService()
+        except Exception as e:
+            raise RuntimeError(f"Error initializing SuggestionEngineService: {e}")
 
         self._db_handler: UsagedataDB = db_handler
         self.preprocessed_logs: queue.Queue = queue.Queue()
 
-        day_log_ids: list[int] = self._db_handler.get_day_log_ids()
-        self.threads: list[threading.Thread] = []
-
-        for i in range(len(day_log_ids)):
-            thread: threading.Thread = threading.Thread(target=self._preprocess_log, args=(day_log_ids[i],), daemon=True)
-            thread.start()
-            self.threads.append(thread)
+        self.preprocess_threads: list[threading.Thread] = []
 
     def _score(self, app_or_title: dict) -> float:
         weight1 = 0.2
@@ -98,7 +95,21 @@ class SuggestionEngine:
 
         self.preprocessed_logs.put(summary)
 
-    def wait_until_ready(self) -> None:
+    def close(self):
+        self._service.close()
+
+    def preprocess_logs(self) -> None:
+        day_log_ids: list[int] = self._db_handler.get_day_log_ids()
+
+        for i in range(len(day_log_ids)):
+            thread: threading.Thread = threading.Thread(target=self._preprocess_log, args=(day_log_ids[i],), daemon=True)
+            thread.start()
+            self.preprocess_threads.append(thread)
+
+    def wait_until_preprocessed_logs(self) -> None:
+        if not self.preprocess_threads:
+            raise RuntimeError("No preprocessing threads found.")
+
         spinner_flag = {"running": True}
         spinner_thread = threading.Thread(
             target = loading_spinner, 
@@ -107,10 +118,8 @@ class SuggestionEngine:
         )
         spinner_thread.start()
 
-        while any(thread.is_alive() for thread in self.threads):
-            time.sleep(0.5)
+        for thread in self.preprocess_threads:
+            thread.join()
 
         spinner_flag["running"] = False
         spinner_thread.join()
-
-        self._service.wait_until_ready()

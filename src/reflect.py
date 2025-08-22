@@ -24,28 +24,40 @@ def handle_options(options: list[str]) -> int:
         return int(choice) - 1
     return -1
 
-# Wait until ready
-def wait_until_ready() -> None:
-    suggestion_engine.wait_until_ready()
+def wait_until_preprocessed_logs() -> ExitCodes:
+    try:
+        suggestion_engine.wait_until_preprocessed_logs()
+        return ExitCodes.CONTINUE
+    except Exception as e:
+        print(f"Error waiting for preprocessed logs: {e}")
+        return ExitCodes.EXIT
 
 # Suggestion Categories Handlers
 def handle_routine_suggestions() -> ExitCodes:
-    wait_until_ready()
+    if wait_until_preprocessed_logs() == ExitCodes.EXIT:
+        return ExitCodes.CONTINUE
+
     print("Routine suggestions are not yet implemented.")
     return ExitCodes.CONTINUE
 
 def handle_productivity_suggestions() -> ExitCodes:
-    wait_until_ready()
+    if wait_until_preprocessed_logs() == ExitCodes.EXIT:
+        return ExitCodes.CONTINUE
+
     print("Productivity suggestions are not yet implemented.")
     return ExitCodes.CONTINUE
 
 def handle_personal_suggestions() -> ExitCodes:
-    wait_until_ready()
+    if wait_until_preprocessed_logs() == ExitCodes.EXIT:
+        return ExitCodes.CONTINUE
+
     print("Personal suggestions are not yet implemented.")
     return ExitCodes.CONTINUE
 
 def handle_professional_suggestions() -> ExitCodes:
-    wait_until_ready()
+    if wait_until_preprocessed_logs() == ExitCodes.EXIT:
+        return ExitCodes.CONTINUE
+
     print("Professional suggestions are not yet implemented.")
     return ExitCodes.CONTINUE
 
@@ -100,7 +112,14 @@ def handle_menu() -> None:
             print("Invalid option. Please try again.")
 
 usagedataDB = UsagedataDB(settings.usagedata_dir)
-suggestion_engine = SuggestionEngine(usagedataDB)
+try:
+    suggestion_engine = SuggestionEngine(usagedataDB)
+except Exception as e:
+    print(f"\nError initialising Suggestion Engine: {e}")
+    exit(1)
+suggestion_engine.preprocess_logs()
 
 print("What would you like to do?")
 handle_menu()
+
+suggestion_engine.close()
