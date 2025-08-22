@@ -12,5 +12,5 @@ def loading_spinner(loading_message: str, flag: dict[str, bool]) -> None:
         sys.stdout.write(f"\r{loading_message}... {next(spinner)}")
         sys.stdout.flush()
         time.sleep(0.1)
-    sys.stdout.write('\r \r')
+    sys.stdout.write('\r' + ' ' * (len(loading_message) + 5) + '\r')
     sys.stdout.flush()
