@@ -2,26 +2,28 @@ import threading
 import heapq
 import queue
 from datetime import datetime
+import time
 import textwrap
 
 from Include.usagedata_db import UsagedataDB
 from Include.service.suggestion_engine_service import SuggestionEngineService
+from Include.loading_spinner import loading_spinner
 import settings
 
 class SuggestionEngine:
     def __init__(self, db_handler: UsagedataDB):
         self._service = SuggestionEngineService()
 
-        self._db_handler = db_handler
-        self.preprocessed_logs = queue.Queue()
+        self._db_handler: UsagedataDB = db_handler
+        self.preprocessed_logs: queue.Queue = queue.Queue()
 
-        day_log_ids = self._db_handler.get_day_log_ids()
-        threads = []
+        day_log_ids: list[int] = self._db_handler.get_day_log_ids()
+        self.threads: list[threading.Thread] = []
 
         for i in range(len(day_log_ids)):
-            thread = threading.Thread(target=self._preprocess_log, args=(day_log_ids[i],), daemon=True)
+            thread: threading.Thread = threading.Thread(target=self._preprocess_log, args=(day_log_ids[i],), daemon=True)
             thread.start()
-            threads.append(thread)
+            self.threads.append(thread)
 
     def _score(self, app_or_title: dict) -> float:
         weight1 = 0.2
@@ -95,3 +97,20 @@ class SuggestionEngine:
                 """)
 
         self.preprocessed_logs.put(summary)
+
+    def wait_until_ready(self) -> None:
+        spinner_flag = {"running": True}
+        spinner_thread = threading.Thread(
+            target = loading_spinner, 
+            args = ("Preprocessing data", spinner_flag), 
+            daemon = True
+        )
+        spinner_thread.start()
+
+        while any(thread.is_alive() for thread in self.threads):
+            time.sleep(0.5)
+
+        spinner_flag["running"] = False
+        spinner_thread.join()
+
+        self._service.wait_until_ready()

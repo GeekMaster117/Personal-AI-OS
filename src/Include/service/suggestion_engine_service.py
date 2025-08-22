@@ -2,8 +2,10 @@ import os
 import json
 import threading
 import sys
+import time
 
 from Include.wrapper.llama_wrapper import LlamaCPP
+from Include.loading_spinner import loading_spinner
 
 class SuggestionEngineService:
     def __init__(self):
@@ -26,30 +28,33 @@ class SuggestionEngineService:
                 raise ValueError("cpu_optimal_batchsize and gpu_optimal_batchsize not found in the configuration file. Please run the benchmark.")
         
         self._llama: LlamaCPP | None = None
-        self._llama_ready: threading.Event = threading.Event()
 
-        thread = threading.Thread(target=self._initialize_llama, args=(cpu_optimal_batchsize, gpu_optimal_batchsize), daemon=True)
-        thread.start()
+        self.init_llama_thread = threading.Thread(
+            target = self._initialize_llama,
+            args = (cpu_optimal_batchsize, gpu_optimal_batchsize),
+            daemon = True,
+            name = "init_llama"
+        )
+        self.init_llama_thread.start()
 
     def _initialize_llama(self, cpu_optimal_batchsize: int, gpu_optimal_batchsize: int):
-        class MainOnlyStdout:
-            def write(self, text):
-                current = threading.current_thread()
-                if not current.daemon:
-                    sys.__stdout__.write(text)
-
-            def flush(self):
-                current = threading.current_thread()
-                if not current.daemon:
-                    sys.__stdout__.flush()
-
-        original_stdout = sys.stdout
-        sys.stdout = MainOnlyStdout()
-
         self._llama = LlamaCPP(cpu_optimal_batchsize, gpu_optimal_batchsize)
-
-        self._llama_ready.set()
 
     def __del__(self):
         if self._llama:
             del self._llama
+
+    def wait_until_ready(self) -> None:
+        spinner_flag = {"running": True}
+        spinner_thread = threading.Thread(
+            target = loading_spinner, 
+            args = ("Initializing Model", spinner_flag), 
+            daemon = True
+        )
+        spinner_thread.start()
+
+        while self.init_llama_thread.is_alive():
+            time.sleep(0.5)
+
+        spinner_flag["running"] = False
+        spinner_thread.join()

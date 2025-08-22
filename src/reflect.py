@@ -24,20 +24,28 @@ def handle_options(options: list[str]) -> int:
         return int(choice) - 1
     return -1
 
+# Wait until ready
+def wait_until_ready() -> None:
+    suggestion_engine.wait_until_ready()
+
 # Suggestion Categories Handlers
 def handle_routine_suggestions() -> ExitCodes:
+    wait_until_ready()
     print("Routine suggestions are not yet implemented.")
     return ExitCodes.CONTINUE
 
 def handle_productivity_suggestions() -> ExitCodes:
+    wait_until_ready()
     print("Productivity suggestions are not yet implemented.")
     return ExitCodes.CONTINUE
 
 def handle_personal_suggestions() -> ExitCodes:
+    wait_until_ready()
     print("Personal suggestions are not yet implemented.")
     return ExitCodes.CONTINUE
 
 def handle_professional_suggestions() -> ExitCodes:
+    wait_until_ready()
     print("Professional suggestions are not yet implemented.")
     return ExitCodes.CONTINUE
 
