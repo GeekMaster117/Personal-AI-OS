@@ -226,12 +226,12 @@ class LlamaCPP:
                 spinner_flag['running'] = False
                 spinner_thread.join()
                 first_chunk = False
-                self.debug and print("LLM: ", end='', flush=True)
+                print("LLM: ", end='', flush=True)
 
             delta = chunk["choices"][0]["delta"]
             content = delta.get("content", "")
-            self.debug and print(content, end='', flush=True)
-        self.debug and print("\n")
+            print(content, end='', flush=True)
+        print("\n")
 
     def run_inference(self, test_prompt: str, max_tokens: int) -> int:
         start = time.monotonic()
