@@ -34,11 +34,9 @@ def wait_until_preprocessed_logs() -> None:
 def handle_routine_suggestions() -> ExitCodes:
     try:
         wait_until_preprocessed_logs()
+        suggestion_engine.generate_suggestions(SuggestionEngine.SuggestionType.ROUTINE)
     except Exception as e:
-        print(f"Error handling routine suggestions: {e}")
-        return ExitCodes.EXIT
-
-    suggestion_engine.generate_suggestions(SuggestionEngine.SuggestionType.ROUTINE)
+        raise RuntimeError(f"Error handling routine suggestions: {e}")
 
     print("-----------------------------")
 
@@ -47,11 +45,9 @@ def handle_routine_suggestions() -> ExitCodes:
 def handle_productivity_suggestions() -> ExitCodes:
     try:
         wait_until_preprocessed_logs()
+        suggestion_engine.generate_suggestions(SuggestionEngine.SuggestionType.PRODUCTIVITY)
     except Exception as e:
-        print(f"Error handling productivity suggestions: {e}")
-        return ExitCodes.EXIT
-
-    suggestion_engine.generate_suggestions(SuggestionEngine.SuggestionType.PRODUCTIVITY)
+        raise RuntimeError(f"Error handling productivity suggestions: {e}")
 
     print("-----------------------------")
 
@@ -60,24 +56,9 @@ def handle_productivity_suggestions() -> ExitCodes:
 def handle_personal_suggestions() -> ExitCodes:
     try:
         wait_until_preprocessed_logs()
+        suggestion_engine.generate_suggestions(SuggestionEngine.SuggestionType.PERSONAL)
     except Exception as e:
-        print(f"Error handling personal suggestions: {e}")
-        return ExitCodes.EXIT
-
-    suggestion_engine.generate_suggestions(SuggestionEngine.SuggestionType.PERSONAL)
-
-    print("-----------------------------")
-
-    return ExitCodes.CONTINUE
-
-def handle_professional_suggestions() -> ExitCodes:
-    try:
-        wait_until_preprocessed_logs()
-    except Exception as e:
-        print(f"Error handling professional suggestions: {e}")
-        return ExitCodes.EXIT
-
-    suggestion_engine.generate_suggestions(SuggestionEngine.SuggestionType.PROFESSIONAL)
+        raise RuntimeError(f"Error handling personal suggestions: {e}")
 
     print("-----------------------------")
 
@@ -88,8 +69,7 @@ def handle_suggestions() -> ExitCodes:
     options = [
         ("Routine Suggestions", handle_routine_suggestions), 
         ("Productivity Suggestions", handle_productivity_suggestions), 
-        ("Personal Suggestions", handle_personal_suggestions), 
-        ("Professional Suggestions", handle_professional_suggestions), 
+        ("Personal Suggestions", handle_personal_suggestions),
         ("Back to Main Menu", back_program), 
         ("Exit", exit_program)
     ]
@@ -143,6 +123,10 @@ except Exception as e:
 suggestion_engine.preprocess_logs()
 
 print("What would you like to do?")
-handle_menu()
 
-suggestion_engine.close()
+try:
+    handle_menu()
+except Exception as e:
+    print(f"Error handling reflect: {e}")
+finally:
+    suggestion_engine.close()
