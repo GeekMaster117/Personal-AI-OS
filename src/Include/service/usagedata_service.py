@@ -64,7 +64,7 @@ class UsagedataService:
         return result[0] if result else None
 
     def get_day_log_ids(self) -> list[int]:
-        query = "SELECT id FROM day_log"
+        query = "SELECT id FROM day_log ORDER BY id ASC"
         result = self._db.fetchall(query)
 
         return [row[0] for row in result] if result else []
