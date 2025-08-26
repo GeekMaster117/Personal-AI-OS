@@ -9,7 +9,8 @@ app_blacklist: set[str] = {
     "startmenuexperiencehost.exe",
     "systemsettings.exe",
     "systemhost.exe",
-    "searchhost.exe"
+    "searchhost.exe",
+    "video.ui.exe"
 }
 
 title_blacklist: set[str] = {
