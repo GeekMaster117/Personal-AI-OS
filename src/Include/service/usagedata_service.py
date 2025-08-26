@@ -162,7 +162,7 @@ class UsagedataService:
 
         return {row[0]: row[1] for row in result} if result else dict()
 
-    def get_app_focus_period(self, day_log_id: int, app_name: str) -> dict[int, dict[str, float]]:
+    def get_app_focus_period(self, day_log_id: int, app_name: str) -> dict[int, dict[str, int | float]]:
         query = """
             SELECT day_hour, focus_duration, focus_count FROM app_focus_period
             WHERE day_log_id = ? AND app_name = ?
@@ -178,7 +178,7 @@ class UsagedataService:
 
         return self.get_app_focus_period(latest_day_log_id, app_name)
     
-    def get_title_focus_period(self, day_log_id: int, app_name: str, title_name: str) -> dict[int, dict[str, float]]:
+    def get_title_focus_period(self, day_log_id: int, app_name: str, title_name: str) -> dict[int, dict[str, int | float]]:
         query = """
             SELECT day_hour, focus_duration, focus_count FROM title_focus_period
             WHERE day_log_id = ? AND app_name = ? AND title_name = ?
