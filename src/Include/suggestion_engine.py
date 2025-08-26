@@ -47,7 +47,7 @@ class SuggestionEngine:
             return "12 PM"
         else:
             return f"{hour - 12} PM"
-        
+
     def _round_off(self, seconds: float) -> int:
         if seconds >= 3600:
             hours = seconds / 3600
@@ -57,8 +57,52 @@ class SuggestionEngine:
             return f"{minutes:.1f} minutes"
         else:
             return f"{round(seconds)} seconds"
+        
+    def _aggregate_focus_hours(self, focus_period: dict[int, dict[str, float]]) -> list[str]:
+        hours = sorted(focus_period.keys()) + [float("inf")]
+        aggregated_hours = []
+        start = prev = hours[0]
 
-    def _top_data(self, day_log_id: int, only_apps: bool = False) -> dict[str, dict[str, int | float | list[float] | dict[str, str | int | float]]]:
+        for hour in hours:
+            if hour - prev > 1:
+                if start != prev:
+                    aggregated_hours.append(f"{self._twelvehour_format(start)} - {self._twelvehour_format(prev)}")
+                else:
+                    aggregated_hours.append(f"{self._twelvehour_format(start)}")
+
+                start = hour
+            prev = hour
+        
+        return aggregated_hours
+
+    # top data dict structure
+    # {
+    #   "app_name": {
+    #       "total_duration": float,
+    #       "total_focus_duration": float,
+    #       "hourly_focus_data" (Present only if aggregate set to False): {
+    #           "hour": {
+    #               "focus_duration": float,
+    #               "focus_count": integer
+    #           }
+    #       },
+    #       "aggregated_focus_duration" (Present only if aggregate set to True): list[str],
+    #       "titles": {
+    #           "title_name": {
+    #               "total_duration": float,
+    #               "total_focus_duration": float,
+    #               "hourly_focus_data" (Present only if aggregate set to False): {
+    #                   "hour": {
+    #                       "focus_duration": float,
+    #                       "focus_count": integer
+    #                   }
+    #               },
+    #               "aggregated_focus_duration" (Present only if aggregate set to True): list[str]
+    #           }
+    #       }
+    #   }
+    # }
+    def _top_data(self, day_log_id: int, only_apps: bool = False, aggregate: bool = False) -> dict:
         apps_titles = self._db_handler.get_app_log_title_log(day_log_id)
 
         apps_titles = heapq.nlargest(settings.data_limit, apps_titles.items(), key=lambda x: self._score(x[1]))
@@ -67,7 +111,10 @@ class SuggestionEngine:
         apps_titles = dict(apps_titles)
 
         for app_name, app_data in apps_titles.items():
-            app_data["hourly_focus_duration"] = self._db_handler.get_app_focus_period(day_log_id, app_name)
+            if aggregate:
+                app_data["aggregated_focus_duration"] = self._aggregate_focus_hours(self._db_handler.get_app_focus_period(day_log_id, app_name))
+            else:
+                app_data["hourly_focus_data"] = self._db_handler.get_app_focus_period(day_log_id, app_name)
 
             if only_apps:
                 continue
@@ -78,45 +125,67 @@ class SuggestionEngine:
             app_data["titles"] = dict(app_data["titles"])
 
             for title_name, title_data in app_data["titles"].items():
-                title_data["hourly_focus_duration"] = self._db_handler.get_title_focus_period(day_log_id, app_name, title_name)
+                if aggregate:
+                    title_data["aggregated_focus_duration"] = self._aggregate_focus_hours(self._db_handler.get_title_focus_period(day_log_id, app_name, title_name))
+                else:
+                    title_data["hourly_focus_data"] = self._db_handler.get_title_focus_period(day_log_id, app_name, title_name)
 
         return apps_titles
 
-    def _preprocess_log_condensed(self, day_log_id: int) -> None:
+    def _preprocess_log_detailed(self, day_log_id: int) -> None:
         day_log = self._db_handler.get_day_log(day_log_id, ('time_anchor',))
         apps_titles = self._top_data(day_log_id)
 
         summary = textwrap.dedent(f"""
-        Date Created: {datetime.fromisoformat(day_log['time_anchor']).date().isoformat()}
-        Top {settings.data_limit} Apps, their Top {settings.data_limit} Titles and thier respective Top {settings.data_limit} Focus Hours:""")
+        Date Created: {datetime.fromisoformat(day_log['time_anchor']).date().isoformat()}""")
+
+        if len(apps_titles) == 0:
+            summary += "No app data available."
+            self.preprocessed_logs[day_log_id] = summary
+            return
+
+        summary += textwrap.dedent(f"""
+        Top {settings.data_limit} Apps and their Top {settings.data_limit} Titles:
+        """)
 
         for i, (app_name, app_data) in enumerate(apps_titles.items()):
             summary += textwrap.dedent(f""" 
             {i + 1}. {app_name}:
             - Total Focus Duration: {self._round_off(app_data['total_focus_duration'])}
             - Total Duration: {self._round_off(app_data['total_duration'])}
-            - Top Focus Hours: [{', '.join(f"{self._twelvehour_format(int(hour))}: {self._round_off(attributes['focus_duration'])}" for hour, attributes in app_data['hourly_focus_duration'].items())}]
-            """)
+            - Hourly Focus Data: [{', '.join(f"{self._twelvehour_format(int(hour))}: {self._round_off(attributes['focus_duration'])}" for hour, attributes in app_data['hourly_focus_data'].items())}]""")
 
             for j, (title_name, title_data) in enumerate(app_data["titles"].items()):
                 summary += textwrap.dedent(f"""
                 - {i + 1}.{j + 1}. {title_name}:
                 -- Total Focus Duration: {self._round_off(title_data['total_focus_duration'])}
                 -- Total Duration: {self._round_off(title_data['total_duration'])}
-                -- Top Focus Hours: [{', '.join(f"{self._twelvehour_format(int(hour))}: {self._round_off(attributes['focus_duration'])}" for hour, attributes in title_data['hourly_focus_duration'].items())}]
-                """)
+                -- Hourly Focus Data: [{', '.join(f"{self._twelvehour_format(int(hour))}: {self._round_off(attributes['focus_duration'])}" for hour, attributes in title_data['hourly_focus_data'].items())}]""")
+            
+            summary += "\n"
 
         self.preprocessed_logs[day_log_id] = summary
 
     def _preprocess_log_condensed(self, day_log_id: int) -> None:
         day_log = self._db_handler.get_day_log(day_log_id, ('time_anchor',))
-        apps = self._top_data(day_log_id, only_apps=True)
+        apps = self._top_data(day_log_id, only_apps=True, aggregate=True)
 
         summary = textwrap.dedent(f"""
-        Date Created: {datetime.fromisoformat(day_log['time_anchor']).date().isoformat()}
-        Top {settings.data_limit} Apps and their Top {settings.data_limit} Focus Hours:""")
+        Date Created: {datetime.fromisoformat(day_log['time_anchor']).date().isoformat()}""")
 
-        # Todo: Implement summary generation for apps and their focus hours
+        if len(apps) == 0:
+            summary += "No app data available."
+            self.preprocessed_logs[day_log_id] = summary
+            return
+
+        summary += textwrap.dedent(f"""
+        Top {settings.data_limit} Apps
+        """)
+
+        for i, (app_name, app_data) in enumerate(apps.items()):
+            summary += textwrap.dedent(f"""
+            {i + 1}. {app_name}: {app_data['aggregated_focus_duration']}
+            """)
 
         self.preprocessed_logs[day_log_id] = summary
 
@@ -129,7 +198,7 @@ class SuggestionEngine:
                 thread.join()
             self.preprocess_threads.clear()
 
-        thread: threading.Thread = threading.Thread(target=self._preprocess_log_condensed, args=(self._day_log_ids[-1],), daemon=True)
+        thread: threading.Thread = threading.Thread(target=self._preprocess_log_detailed, args=(self._day_log_ids[-1],), daemon=True)
         thread.start()
         self.preprocess_threads.append(thread)
 
@@ -161,14 +230,11 @@ class SuggestionEngine:
             if day_log_id not in self.preprocessed_logs:
                 raise RuntimeError(f"Day log {day_log_id} not preprocessed yet.")
 
-        latest_day_log = self.preprocessed_logs[self._day_log_ids[-1]]
-
         user_prompt = textwrap.dedent(f"""
         Give me {suggestion_type.value} suggestions based on this app data:
 
-        Current Day App Data:
-        """)
-        user_prompt += latest_day_log
+        Current Day App Data:""")
+        user_prompt += self.preprocessed_logs[self._day_log_ids[-1]]
 
         if len(self._day_log_ids) == 1:
             user_prompt += textwrap.dedent("""
@@ -176,8 +242,7 @@ class SuggestionEngine:
 
         for i in range(len(self._day_log_ids) - 2, -1, -1):
             user_prompt += textwrap.dedent(f"""
-            {len(self._day_log_ids) - 1 - i} Day(s) Back App Data Summary:
-            """)
+            {len(self._day_log_ids) - 1 - i} Day(s) Back App Data Summary:""")
             user_prompt += self.preprocessed_logs[self._day_log_ids[i]]
 
         self._service.chat(user_prompt)
