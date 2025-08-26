@@ -17,11 +17,12 @@ del /q AI_OS.spec
 
 echo Building .exe with PyInstaller...
 pyinstaller --onedir --name observe ..\src\observe.py --distpath %root% --workpath ..\build\
+pyinstaller --onedir --name reflect ..\src\reflect.py --distpath %root% --workpath ..\build\
 pyinstaller --onedir --name benchmark_cli ..\benchmark_cli.py --distpath %root% --workpath ..\build\ --add-data "..\src\Lib\site-packages\llama_cpp\lib;llama_cpp\lib"
 pyinstaller --onedir --name install ..\install.py --distpath %root% --workpath ..\build\
 
 echo Merging executables...
-set apps=observe benchmark_cli install
+set apps=observe reflect benchmark_cli install
 for %%A in (%apps%) do (
     echo Merging %%A...
     robocopy "%root%\%%A" "%root%" /E /XC /XN /XO
@@ -33,6 +34,9 @@ xcopy /Y /E ..\requirements\ ..\dist\%app_name%\requirements\
 
 echo Copying required DLLs...
 xcopy /Y /E ..\bin\ ..\dist\%app_name%\bin\
+
+echo Copying SQL...
+xcopy /Y /E ..\sql\ ..\dist\%app_name%\sql\
 
 echo Copying Data...
 if exist data\ (
