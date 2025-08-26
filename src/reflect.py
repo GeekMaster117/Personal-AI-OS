@@ -1,8 +1,11 @@
 from enum import Enum
 
+import settings
 from Include.usagedata_db import UsagedataDB
 from Include.suggestion_engine import SuggestionEngine
-import settings
+from Include.verify_install import verify_installation
+
+verify_installation()
 
 class ExitCodes(Enum):
     EXIT = -1

@@ -1,11 +1,12 @@
 import time
 import signal
-from pathlib import Path
 
 import Include.app_monitor as app_monitor
-import settings as settings
-
+import settings
 from Include.usagedata_db import UsagedataDB
+from Include.verify_install import verify_installation
+
+verify_installation()
 
 shutdown_request: bool = False
 
