@@ -66,7 +66,7 @@ if __name__ == "__main__":
     print("Models installed successfully.\n")
 
     benchmark("cpu")
-    print("CPU benchmark completed.")
+    print("CPU benchmark completed.\n")
 
     benchmark("gpu")
     print("GPU benchmark completed.")
