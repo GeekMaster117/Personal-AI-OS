@@ -16,13 +16,17 @@ def back_program() -> ExitCodes:
     return ExitCodes.BACK
 
 def handle_options(options: list[str]) -> int:
-    for i, option in enumerate(options, start=1):
-        print(f"{i}. {option[0]}")
+    while True:
+        for i, option in enumerate(options, start=1):
+            print(f"{i}. {option[0]}")
 
-    choice = input(f"Select an option (1-{len(options)}): ")
-    if choice.isdigit() and 1 <= int(choice) <= len(options):
-        return int(choice) - 1
-    return -1
+        choice = input(f"Select an option (1-{len(options)}): ")
+        if choice.isdigit() and 1 <= int(choice) <= len(options):
+            return int(choice) - 1
+        print("-----------------------------")
+        
+        print(f"Invalid option. Please enter a valid option between 1-{len(options)}.")
+        print("-----------------------------")
 
 def wait_until_preprocessed_logs() -> None:
     try:
@@ -76,16 +80,13 @@ def handle_suggestions() -> ExitCodes:
 
     while True:
         choice = handle_options(options)
-
         print("-----------------------------")
-        if choice != -1:
-            result = options[choice][1]()
-            if result == ExitCodes.EXIT:
-                return ExitCodes.EXIT
-            elif result == ExitCodes.BACK:
-                break
-        else:
-            print("Invalid option. Please try again.")
+
+        result = options[choice][1]()
+        if result == ExitCodes.EXIT:
+            return ExitCodes.EXIT
+        elif result == ExitCodes.BACK:
+            break
 
     return ExitCodes.CONTINUE
 
@@ -106,12 +107,9 @@ def handle_menu() -> None:
         choice = handle_options(options)
 
         print("-----------------------------")
-        if choice != -1:
-            result = options[choice][1]()
-            if result == ExitCodes.EXIT:
-                break
-        else:
-            print("Invalid option. Please try again.")
+        result = options[choice][1]()
+        if result == ExitCodes.EXIT:
+            break
 
 usagedataDB = UsagedataDB(settings.usagedata_dir)
 try:
