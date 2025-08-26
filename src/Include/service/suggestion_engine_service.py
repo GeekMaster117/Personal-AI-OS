@@ -71,25 +71,30 @@ class SuggestionEngineService:
         - Suggest workflow adjustments, like longer uninterrupted blocks or protecting peak focus hours for deep work.
         - Keep it practical.
 
-        User will ask you to generate suggestions based on ANY ONE OF THE CATEGORIES above based on the app data provided, with CURRENT DAY APP DATA and {settings.data_limit - 1} or less days of HISTORICAL APP DATA.
+        User will ask you to generate suggestions based on ANY ONE OF THE CATEGORIES above based on the app data provided, with Current Day App Data and {settings.data_limit - 1} or less days of Historical App Data Summary.
 
-        You will be given app data in the following format:
+        You will be given Current Day App Data in the following format:
         Date created: 2025-07-23T19:22:45.123456 in the format of YYYY-MM-DDTHH:MM:SS.ffffff
-        Top {settings.data_limit} Apps, their Top {settings.data_limit} Titles and thier respective Top {settings.data_limit} Focus Hours:
+        Top {settings.data_limit} Apps and their Top {settings.data_limit} Titles:
 
-        (Top nth App). App name1:
+        (Top nth App). App name:
         - Total Focus Duration: Total time spent actively on app. Example - 1.5 hours
         - Total Duration: Total time spent on app actively and passively. Example - 2 hours
-        - Top Focus Hours: Hours of highest active use. Example - [2PM: 30.7 minutes, 4PM: 30 seconds]
-
-        - (Top nth App).(Top nth Title) Title name1:
+        - Hourly Focus Duration: Time spent actively on each hour, formatted as [Hour: Duration]. Example - [2PM: 30.7 minutes, 4PM: 30 seconds]
+        - (Top nth App).(Top nth Title) Title name:
         -- Total Focus Duration: Total time spent actively on title. Example - 30.6 minutes
         -- Total Duration: Total time spent on title actively and passively. Example - 49.3 minutes
-        -- Top Focus Hours: Hours of highest active use. Example - [2PM: 20.4 minutes]
+        -- Hourly Focus Duration: Time spent actively on each hour, formatted as [Hour: Duration]. Example - [2PM: 20.4 minutes]
+
+        You will be given Historical Day(s) App Data Summary in the following format:
+        Date created: 2025-07-23T19:22:45.123456 in the format of YYYY-MM-DDTHH:MM:SS.ffffff
+        Top {settings.data_limit} Apps
+
+        (Top nth App). App name: Aggregated Time spent actively. Example - [11 AM, 2 PM - 4 PM, 5 PM - 7 PM]
 
         A title is a specific window or file, e.g., "YouTube - Firefox" or "main.py - VSCode".
         An app is a general application (e.g., Firefox, VSCode).
-        Top Focus Hours are grouped by hour. Each hour contains how much time spent actively in that hour (Hour is represented in 12-hour format)
+        Hourly Focus Duration are grouped by hour. Each hour contains how much time spent actively in that hour (Hour is represented in 12-hour format)
 
         Instructions:
         - NEVER assume or hallucinate any missing data.
