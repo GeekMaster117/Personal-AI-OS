@@ -140,7 +140,7 @@ class SuggestionEngine:
         Date Created: {datetime.fromisoformat(day_log['time_anchor']).date().isoformat()}""")
 
         if len(apps_titles) == 0:
-            summary += "No app data available."
+            summary += "\nNo app data available.\n"
             self.preprocessed_logs[day_log_id] = summary
             return
 
@@ -174,7 +174,7 @@ class SuggestionEngine:
         Date Created: {datetime.fromisoformat(day_log['time_anchor']).date().isoformat()}""")
 
         if len(apps) == 0:
-            summary += "No app data available."
+            summary += "\nNo app data available.\n"
             self.preprocessed_logs[day_log_id] = summary
             return
 
@@ -237,8 +237,7 @@ class SuggestionEngine:
         user_prompt += self.preprocessed_logs[self._day_log_ids[-1]]
 
         if len(self._day_log_ids) == 1:
-            user_prompt += textwrap.dedent("""
-            No historical data available.""")
+            user_prompt += "No historical data available."
 
         for i in range(len(self._day_log_ids) - 2, -1, -1):
             user_prompt += textwrap.dedent(f"""
