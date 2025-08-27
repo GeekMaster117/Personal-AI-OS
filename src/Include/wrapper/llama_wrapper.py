@@ -1,5 +1,11 @@
-import pycuda.autoinit
-import pycuda.driver as cuda
+CUDA_AVAILABLE = None
+try:
+    import pycuda.autoinit
+    import pycuda.driver as cuda
+    CUDA_AVAILABLE = True
+except:
+    CUDA_AVAILABLE = False
+
 import ctypes
 import os
 import psutil
@@ -43,7 +49,7 @@ class LlamaCPP:
                 n_threads = threads or os.cpu_count(),
                 n_gpu_layers = gpu_layers or best_device_info['gpu_layers'],
                 n_batch = batch_size or best_device_info['batch_size'],
-                verbose = False,
+                verbose = False
             )
 
     def _save_sys_cache(self, system_prompt: str, cache_dir: str) -> None:
@@ -60,106 +66,104 @@ class LlamaCPP:
             self.llm.load_state(pickle.load(file))
     
     def _get_device_info(self, gpu_optimal_batchsize: int, cpu_optimal_batchsize: int, gpu: bool = True) -> dict[str, str | int]:
+        #Total RAM used = layers * [(total_layers / model_size) + (window_size * KV cache per token per layer) + (batch_size * activations_per_token)]
+        #All the calculations below happen in MB
+
+        model_size = os.path.getsize(settings.model_dir) / (1024 ** 2)
+        layer_size = model_size / settings.total_model_layers
+
+        kvcache_token_layer = 0.0009765625 #Rule of thumb is 1KB of kv cache per token per layer in float16
+        total_kvcache = settings.model_window_size * kvcache_token_layer
+
+        activations_token = 0.00390625 #Rule of thumb is 4KB of activations per token in float16
+
         best_device_info = None
-        if gpu:
+        if CUDA_AVAILABLE and gpu:
             self.debug and print("Checking support for GPU accleration...", flush=True)
-            best_device_info = LlamaCPP._get_gpu_info(gpu_optimal_batchsize)
+            best_device_info = LlamaCPP._get_gpu_info(gpu_optimal_batchsize, layer_size, total_kvcache, activations_token)
+            if best_device_info["batch_size"] == 0:
+                self.debug and print("Insufficient GPU memory.")
+                best_device_info = None
 
         if not best_device_info:
             self.debug and print("Skipping GPU acceleration.")
-            memory = psutil.virtual_memory()
-            best_device_info = {
-                'idx': -1,
-                'free_mem': memory.free / (1024 ** 2),
-                'total_mem': memory.total / (1024 ** 2),
-                'arch': 'cpu',
-                'gpu_layers': 0,
-                'batch_size': cpu_optimal_batchsize
-            }
+            best_device_info = LlamaCPP._get_cpu_info(cpu_optimal_batchsize, layer_size, total_kvcache, activations_token)
         
+        if best_device_info['batch_size'] == 0:
+            raise RuntimeError("Not enough memory to load the model. Please try closing other applications.")
         return best_device_info
 
-    def _get_optimal_config(free_memory, total_layers, gpu_layers, layer_size, kv_cache, activations_token, gpu_optimal_batchsize) -> dict[str, float | int]:
-        # VRAM used by layers = (No.of Layers * Size of each Layer) + KV cache per Layer
+    def _get_optimal_config(free_memory, total_layers, layers_loaded, layer_size, total_kv_cache, activations_token, compute_optimal_batchsize) -> dict[str, float | int]:
+        # Memory used by layers = (No.of Layers * Size of each Layer) + KV cache per Layer
 
-        vram_layers = (gpu_layers * layer_size) + kv_cache
-        vram_left = free_memory - vram_layers
+        memory_layers = (layers_loaded * layer_size) + total_kv_cache
+        memory_left = free_memory - memory_layers
 
-        #Returns negative infinite score when no free VRAM left
+        #Returns negative infinite score when no free memory left
 
-        if vram_left <= 0:
+        if memory_left < activations_token:
             return {'score': -float('inf'), 'batch_size': 0}
 
-        #Batch size decided by memory = VRAM used by layers / activation per token
+        #Batch size decided by memory = Memory used by layers / activation per token
 
-        vram_optimal_batchsize = vram_left / activations_token
+        memory_full_batchsize = memory_left / activations_token
 
-        #Since we don't want to occupy entire GPU VRAM, we discount it by 20%. Also llama.cpp may round up the batch size leading to more memory consumption
+        #Since we don't want to occupy entire memory, we discount it by 20%. Also llama.cpp may round up the batch size leading to more memory consumption
+        #If memory full batchsize equal to 1, then we don't discount it.
 
-        vram_batchsize = int(vram_optimal_batchsize * 0.8)
+        memory_optimal_batchsize = max(1, int(memory_full_batchsize * 0.8))
 
-        batch_size = min(vram_batchsize, gpu_optimal_batchsize)
+        batch_size = min(memory_optimal_batchsize, compute_optimal_batchsize)
 
         #Score = batch size - ((total layers - layers) * weight), where weight is preference of layers over batch size.
 
-        latency_penalty = (total_layers - gpu_layers) * settings.layer_batchsize_weight
+        latency_penalty = (total_layers - layers_loaded) * settings.layer_batchsize_weight
         score = batch_size - latency_penalty
         
         config = {
             'score': score,
-            'layers': gpu_layers,
+            'layers': layers_loaded,
             'batch_size': batch_size
         }
 
         return config
 
-    def _get_gpu_info(gpu_optimal_batchsize: int) -> dict[str, str | int] | None:
+    def _get_gpu_info(gpu_optimal_batchsize: int, layer_size: float, total_kvcache: float, activations_token: float) -> dict[str, str | int] | None:
         try:
-            best_device_info: dict | None = None
+            best_gpu_info: dict | None = None
             for idx in range(cuda.Device.count()):
                 device = cuda.Device(idx)
                 context = device.make_context()
                 free_mem, total_mem = cuda.mem_get_info()
                 context.pop()
 
-                if best_device_info:
-                    if (best_device_info['free_mem'] < free_mem) or (best_device_info['free_mem'] == free_mem and best_device_info['total_mem'] < total_mem):
-                        best_device_info = {
+                if best_gpu_info:
+                    if (best_gpu_info['free_mem'] < free_mem) or (best_gpu_info['free_mem'] == free_mem and best_gpu_info['total_mem'] < total_mem):
+                        best_gpu_info = {
                             'idx': idx,
                             'free_mem': free_mem,
                             'total_mem': total_mem
                         }
                 else:
-                    best_device_info = {
+                    best_gpu_info = {
                         'idx': idx,
                         'free_mem': free_mem,
                         'total_mem': total_mem
                     }
 
-            if not best_device_info:
+            if not best_gpu_info:
                 return
             
-            device = cuda.Device(best_device_info['idx'])
+            device = cuda.Device(best_gpu_info['idx'])
             compute_capability = device.compute_capability()
             arch = (compute_capability[0] * 10) + compute_capability[1]
-            best_device_info['arch'] = arch
-
-            #Total RAM used = layers * [(total_layers / model_size) + (window_size * KV cache per token per layer) + (batch_size * activations_per_token)]
-            #All the calculations below happen in MB
-
-            model_size = os.path.getsize(settings.model_dir) / (1024 ** 2)
-            layer_size = settings.total_model_layers / model_size
-
-            kvcache_token_layer = 0.0009765625 #Rule of thumb is 1KB of kv cache per token per layer in float16
-            total_kvcache = settings.model_window_size * kvcache_token_layer
-
-            activations_token = 0.00390625 #Rule of thumb is 4KB of activations per token in float16
+            best_gpu_info['arch'] = arch
 
             #We perform a ternary search to find optimal gpu layers and batch size, we decide them by using a score
 
             def get_config(gpu_layers: int) -> dict[str, float | int]:
                 return LlamaCPP._get_optimal_config(
-                    best_device_info['free_mem'], 
+                    best_gpu_info['free_mem'], 
                     settings.total_model_layers, 
                     gpu_layers, 
                     layer_size, 
@@ -183,13 +187,40 @@ class LlamaCPP:
 
             best_config = max([get_config(layers) for layers in range(low, high + 1)], key = lambda x : x['score'])
 
-            best_device_info['gpu_layers'] = best_config['layers']
-            best_device_info['batch_size'] = best_config['batch_size']
+            best_gpu_info['gpu_layers'] = best_config['layers']
+            best_gpu_info['batch_size'] = best_config['batch_size']
 
-            return best_device_info
+            return best_gpu_info
         except:
             return
-        
+
+    def _get_cpu_info(cpu_optimal_batchsize: int, layer_size: float, total_kvcache: float, activations_token: float) -> dict[str, str | int] | None:
+        memory = psutil.virtual_memory()
+        free_mem = memory.free / (1024 ** 2)
+        total_mem = memory.total / (1024 ** 2)
+
+        cpu_info = {
+            'idx': -1,
+            'free_mem': free_mem,
+            'total_mem': total_mem,
+            'arch': 'cpu'
+        }
+
+        config = LlamaCPP._get_optimal_config(
+            free_mem, 
+            settings.total_model_layers, 
+            settings.total_model_layers, 
+            layer_size, 
+            total_kvcache, 
+            activations_token, 
+            cpu_optimal_batchsize
+        )
+
+        cpu_info['gpu_layers'] = 0
+        cpu_info['batch_size'] = config['batch_size']
+
+        return cpu_info
+
     def handle_sys_cache(self, system_prompt: str, cache_name: str) -> None:
         if not os.path.exists(settings.cache_dir):
             os.makedirs(settings.cache_dir)
