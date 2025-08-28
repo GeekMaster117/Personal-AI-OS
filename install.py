@@ -63,10 +63,11 @@ if __name__ == "__main__":
             DEST_PATH = "models/" + MODEL_URL.split("/")[-1]
             os.makedirs("models/", exist_ok=True)
             download_model(MODEL_URL, DEST_PATH)
-    print("Models installed successfully.\n")
 
     benchmark("cpu")
     print("CPU benchmark completed.\n")
 
     benchmark("gpu")
     print("GPU benchmark completed.")
+
+    input("\nPress any key to exit...")

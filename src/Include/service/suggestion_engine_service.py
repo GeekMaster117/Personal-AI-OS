@@ -43,9 +43,9 @@ class SuggestionEngineService:
             llama.handle_sys_cache(self._get_system_prompt(), "suggestions_sys_cache")
         except Exception as e:
             raise RuntimeError(f"Error initializing LlamaCPP: {e}")
-
-        spinner_flag["running"] = False
-        spinner_thread.join()
+        finally:
+            spinner_flag["running"] = False
+            spinner_thread.join()
 
         return llama
 

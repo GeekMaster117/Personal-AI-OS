@@ -1,7 +1,7 @@
 CUDA_AVAILABLE = None
 try:
-    import pycuda.autoinit
     import pycuda.driver as cuda
+    cuda.init()
     CUDA_AVAILABLE = True
 except:
     CUDA_AVAILABLE = False
@@ -276,4 +276,4 @@ class LlamaCPP:
         return int(completion_tokens / (end - start))
     
     def supports_gpu_acceleration() -> bool:
-        return cuda.Device.count() != 0
+        return CUDA_AVAILABLE

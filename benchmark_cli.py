@@ -11,8 +11,14 @@ if __name__ == "__main__":
         print("  cpu: Run CPU benchmark")
         print("  gpu: Run GPU benchmark")
     elif mode == "cpu":
-        Benchmark.config_cpu_optimal_batchsize()
+        try:
+            Benchmark.config_cpu_optimal_batchsize()
+        except Exception as e:
+            print("Error occurred during CPU benchmark:", e)
     elif mode == "gpu":
-        Benchmark.config_gpu_optimal_batchsize()
+        try:
+            Benchmark.config_gpu_optimal_batchsize()
+        except Exception as e:
+            print("Error occurred during GPU benchmark:", e)
     else:
         print("Invalid mode. Use 'help' for usage information.")

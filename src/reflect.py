@@ -5,7 +5,13 @@ from Include.usagedata_db import UsagedataDB
 from Include.suggestion_engine import SuggestionEngine
 from Include.verify_install import verify_installation
 
-verify_installation()
+try:
+    verify_installation()
+except Exception as e:
+    print(f"Installation verification failed: {e}. Please run install.exe")
+
+    input("\nPress any key to exit...")
+    exit(1)
 
 class ExitCodes(Enum):
     EXIT = -1
@@ -108,8 +114,8 @@ def handle_menu() -> None:
 
     while True:
         choice = handle_options(options)
-
         print("-----------------------------")
+
         result = options[choice][1]()
         if result == ExitCodes.EXIT:
             break
@@ -118,7 +124,9 @@ usagedataDB = UsagedataDB(settings.usagedata_dir)
 try:
     suggestion_engine = SuggestionEngine(usagedataDB)
 except Exception as e:
-    print(f"\nError initialising Suggestion Engine: {e}")
+    print(f"\nError initialising SuggestionEngine: {e}")
+
+    input("\nPress any key to exit...")
     exit(1)
 
 suggestion_engine.preprocess_logs()
@@ -129,5 +137,7 @@ try:
     handle_menu()
 except Exception as e:
     print(f"Error handling reflect: {e}")
-finally:
-    suggestion_engine.close()
+
+suggestion_engine.close()
+
+input("\nPress any key to exit...")

@@ -6,7 +6,13 @@ import settings
 from Include.usagedata_db import UsagedataDB
 from Include.verify_install import verify_installation
 
-verify_installation()
+try:
+    verify_installation()
+except Exception as e:
+    print(f"Installation verification failed: {e}. Please run install.exe")
+
+    input("\nPress any key to exit...")
+    exit(1)
 
 shutdown_request: bool = False
 
@@ -37,3 +43,5 @@ while not shutdown_request:
     while elapsed_time < settings.tick.total_seconds() and not shutdown_request:
         time.sleep(sleep_interval)
         elapsed_time += sleep_interval
+
+input("\nPress any key to exit...")
