@@ -1,13 +1,17 @@
-CUDA_AVAILABLE = None
-try:
-    import pycuda.driver as cuda
-    cuda.init()
-    CUDA_AVAILABLE = True
-except:
-    CUDA_AVAILABLE = False
+import warnings
 
-import ctypes
+CUDA_AVAILABLE = None
+with warnings.catch_warnings():
+    warnings.simplefilter("ignore")
+    try:
+        import pycuda.driver as cuda
+        cuda.init()
+        CUDA_AVAILABLE = True
+    except:
+        CUDA_AVAILABLE = False
+
 import os
+import ctypes
 import psutil
 import threading
 import time
