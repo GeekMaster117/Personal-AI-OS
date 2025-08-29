@@ -26,14 +26,14 @@ class Benchmark:
         print("Running CPU benchmark...", flush=True)
 
         def test_batchsize(batch_size: int) -> int:
+            llama = None
             try:
                 llama = LlamaCPP(gpu_optimal_batchsize = 0, cpu_optimal_batchsize = batch_size, gpu_acceleration = False)
                 throughput = llama.run_inference(Benchmark.test_prompt, Benchmark.max_tokens)
             except Exception as e:
                 raise RuntimeError(f"Error during CPU benchmark: {e}")
             finally:
-                if llama is not None:
-                    del llama
+                del llama
 
             return throughput
 
@@ -61,14 +61,14 @@ class Benchmark:
             return
 
         def test_batchsize(batch_size: int) -> int:
+            llama = None
             try:
                 llama = LlamaCPP(gpu_optimal_batchsize = batch_size, cpu_optimal_batchsize = 0, gpu_acceleration = True)
                 throughput = llama.run_inference(Benchmark.test_prompt, Benchmark.max_tokens)
             except Exception as e:
                 raise RuntimeError(f"Error during GPU benchmark: {e}")
             finally:
-                if llama:
-                    del llama
+                del llama
 
             return throughput
         

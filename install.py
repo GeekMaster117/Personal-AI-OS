@@ -65,9 +65,9 @@ if __name__ == "__main__":
             download_model(MODEL_URL, DEST_PATH)
 
     benchmark("cpu")
-    print("CPU benchmark completed.\n")
+    print("\nCPU benchmark completed.")
 
     benchmark("gpu")
-    print("GPU benchmark completed.")
+    print("\nGPU benchmark completed.")
 
     input("\nPress any key to exit...")
