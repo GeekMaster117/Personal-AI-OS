@@ -6,7 +6,40 @@ An AI Meta Operating System, which monitors your data, gives suggestions based o
 
 - Completely Offline, but still intelligent.
 
-- Autonomous, but predictable.
+- Run on low-end devices.
+
+## How to Use
+
+### Installation
+
+- Run **install.exe**
+- This will install the model and run benchmarks on CPU and GPU if available.
+
+### Monitoring
+
+- Run **observe.exe**
+- This will monitor your app data.
+- Data monitored:
+  - Apps you use and their titles. (Used for suggestions)
+  - The time you spend actively, passively and total duration on each app and its titles. (Used to find patterns over a span of days)
+  - Number of times you switch between apps and their titles. (Used to find distractions)
+  - The duration **observe.exe** has been offline. (Model avoids suggestions during this time frame, and to know how long you have been offline)
+  - Number of times the system clock has been changed. (If the count is too high, the model knows the data may be invalid).
+ 
+### Suggestions
+
+- Run **reflect.exe**
+- Gives suggestions based on the monitored data.
+- Suggestions available:
+  - **Routine Suggestions**: Describes when and how consistently apps/titles are used, or when idle recovery occurs.
+  - **Productivity Suggestions**: Suggests workflow adjustments, like longer uninterrupted blocks or protecting peak focus hours for deep work.
+  - **Personal Suggestions**: Suggest small lifestyle adjustments, like taking breaks or avoiding late-night sessions.
+ 
+## Privacy
+
+- It runs locally. Your data is never sent online.
+- Your data is stored in data/usagedata.db file. You can choose to delete the file.
+- Your data is managed with **SQLite**. You can use SQLite queries to view, update, and delete data from data/usagedata.db file.
 
 ## Architecture
 
