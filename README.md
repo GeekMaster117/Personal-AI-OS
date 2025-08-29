@@ -38,12 +38,13 @@ An AI Meta Operating System, which monitors your data, gives suggestions based o
 ## Privacy
 
 - It runs locally. Your data is never sent online.
+- Nothing runs without you knowing. To stop tracking, simply close the observe.exe window or press Ctrl + C; it stops immediately.
 - Your data is stored in data/usagedata.db file. You can choose to delete the file.
 - Your data is managed with **SQLite**. You can use SQLite queries to view, update, and delete data from data/usagedata.db file.
 
 ## Architecture
 
-Sentinel works in three stages, each with modular subsystems:
+Personal AI OS works in three stages, each with modular subsystems:
 
 ### Observe
 
@@ -51,11 +52,11 @@ Track how you spend time across your computer.
 
 - **App Monitor** – Tracks your app activity
 
-- **Browser Monitor** – Tracks your web activity
+- **Browser Monitor** – Tracks your web activity (Partially implemented in **App Monitor**)
 
-- **Github Monitor** – Tracks you code activity
+- **Github Monitor** – Tracks your code activity (Not implemented yet)
 
-- **Input Monitor** – Tracks your peripheral activity
+- **Input Monitor** – Tracks your peripheral activity (Not implemented yet)
 
 ### Reflect
 
@@ -63,13 +64,13 @@ Suggest ways to improve routine, personal and professional life along with produ
 
 - **Routine Suggestions** – Suggestions on things you do often with a hidden or visible pattern.
 
-- **Professional Suggestions** – Suggestions on improving professional life.
+- **Professional Suggestions** – Suggestions on improving professional life. (Not implemented yet)
 
 - **Productivity Suggestions** – Suggestions on improving your productivity.
 
 - **Personal Suggestions** – Suggestions on improving your personal life.
 
-### Act
+### Act (Not implemented yet)
 
 Build automations to improve personal, professional life and improve productivity by automating routines.
 
@@ -79,13 +80,8 @@ Build automations to improve personal, professional life and improve productivit
 
 ## System Diagram
 
-![image](https://github.com/user-attachments/assets/bab6660a-d8b3-452a-8055-88e2a008c7ce)
-
-## Privacy and Ethics
-
-- It runs locally. You own your data.
-
-- You can choose to delete your data at any time.
+![Personal AI OS Level 1 Level 2](https://github.com/user-attachments/assets/bab6660a-d8b3-452a-8055-88e2a008c7ce)
+![Personal AI OS Level 2 Level 3](https://github.com/user-attachments/assets/074fb7f8-7a45-4915-8828-e1928393fdf2)
 
 ---
 
