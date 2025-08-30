@@ -113,6 +113,41 @@ Build automations to improve personal, professional life and improve productivit
 ![Personal AI OS Level 2 Level 3](https://github.com/user-attachments/assets/074fb7f8-7a45-4915-8828-e1928393fdf2)
 ![Personal AI OS Level 3](https://github.com/user-attachments/assets/3e890d22-e69d-4b85-af98-cf6410a83567)
 
+## Core Logic
+
+### Wrappers (Low-Level Components)
+
+#### Llama Wrapper (llama_wrapper.py)
+
+LLaMA wrapper follows a step-by-step process to efficiently allocate resources based on availability, and ensures that the model runs within the memory limits without causing overflow.
+
+**Step by Step Flow**:
+1. Detect Available GPUs:
+    - It first checks for the presence of Nvidia GPUs with supported architectures: 61, 75, 86, 89, 120
+    - If multiple GPUs exist, it evaluates the best GPU based on free memory. If multiple GPUs have the same free memory, it breaks the tie by checking total memory.
+2. Select Optimal GPU Configuration:
+    - Once the best GPU is found, it calculates the optimal batch size and GPU layers and tries not to exceed 80% VRAM usage.
+    - Latency penalty is computed to balance batch size with the number of layers that can be loaded into VRAM:
+     ``` shell
+     latency_penalty = (total_layers - layers_loaded) * layer_batchsize_weight
+     score = batch_size - latency_penalty
+     ```
+    - If the optimal batch size is 0, then it will skip GPU acceleration.
+3. Fallback to CPU:
+    - Falls back to CPU if no compatible GPU exists, or if VRAM is too low for the best GPU.
+    - It will try to fit the entire model into RAM.
+    - If RAM is insufficient to hold the model, it will raise an error and stop the initialisation.
+     ``` shell
+     Not enough memory to load the model. Please try closing other applications.
+     ```
+4. Model Initialisation:
+    - After selecting the best device, it will load the model onto it.
+
+**Features**:
+- Caching and Loading system prompt
+- Chat with the model
+- Run inference
+
 ---
 
 Built by someone who just wanted to understand himself, and got carried away by building an AI OS instead. No cap.
