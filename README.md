@@ -111,6 +111,7 @@ Build automations to improve personal, professional life and improve productivit
 
 ![Personal AI OS Level 1 Level 2](https://github.com/user-attachments/assets/bab6660a-d8b3-452a-8055-88e2a008c7ce)
 ![Personal AI OS Level 2 Level 3](https://github.com/user-attachments/assets/074fb7f8-7a45-4915-8828-e1928393fdf2)
+![Personal AI OS Level 3](https://github.com/user-attachments/assets/3e890d22-e69d-4b85-af98-cf6410a83567)
 
 ---
 
