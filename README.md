@@ -42,6 +42,35 @@ An AI Meta Operating System, which monitors your data, gives suggestions based o
 - Your data is stored in data/usagedata.db file. You can choose to delete the file.
 - Your data is managed with **SQLite**. You can use SQLite queries to view, update, and delete data from data/usagedata.db file.
 
+## How to build the Project (In Windows OS)
+
+### Requirements
+
+- Python 3.10+
+- CMake
+- Visual Studio 17 2022 with C++ development tools
+
+**Note**: Recommended to do this in a Python virtual environment
+
+### Steps
+
+1. Install the necessary Python packages from dev/requirements.txt
+``` shell
+pip install -r dev/requirements.txt
+```
+2. Set up the Visual Studio Environment. Typically found in:
+``` shell
+C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvars64.bat
+```
+3. Install llama-cpp-python with the following command:
+``` shell
+pip install llama-cpp-python --global-option=build_ext --global-option="-G Visual Studio 17 2022" --global-option="-DLLAMA_BUILD_SHARED_LIBS" --global-option="-DLLAMA_CUDA=off" --global-option="-DLLAMA_CURL=off" --global-option="-DCMAKE_BUILD_TYPE=Release"
+```
+4. Run build.bat to build the project to dist/AI_OS
+``` shell
+.\dev\build.bat
+```
+
 ## Architecture
 
 Personal AI OS works in three stages, each with modular subsystems:
