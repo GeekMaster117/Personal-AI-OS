@@ -35,7 +35,7 @@ class LlamaCPP:
             debug: bool = False
         ):
         self.debug = debug
-        best_device_info = self._get_device_info(gpu_optimal_batchsize, cpu_optimal_batchsize, gpu = gpu_acceleration)
+        best_device_info = LlamaCPP._get_device_info(gpu_optimal_batchsize, cpu_optimal_batchsize, gpu = gpu_acceleration)
 
         if best_device_info['arch'] in settings.supported_arch:
             ctypes.CDLL(settings.llama_library_dir + "/llama.dll")
@@ -68,8 +68,8 @@ class LlamaCPP:
     def _load_sys_cache(self, cache_dir: str) -> None:
         with open(cache_dir, "rb") as file:
             self.llm.load_state(pickle.load(file))
-    
-    def _get_device_info(self, gpu_optimal_batchsize: int, cpu_optimal_batchsize: int, gpu: bool = True) -> dict[str, str | int]:
+
+    def _get_device_info(gpu_optimal_batchsize: int, cpu_optimal_batchsize: int, gpu: bool = True, debug: bool = False) -> dict[str, str | int]:
         #Total RAM used = layers * [(total_layers / model_size) + (window_size * KV cache per token per layer) + (batch_size * activations_per_token)]
         #All the calculations below happen in MB
 
@@ -83,14 +83,14 @@ class LlamaCPP:
 
         best_device_info = None
         if CUDA_AVAILABLE and gpu:
-            self.debug and print("Checking support for GPU accleration...", flush=True)
+            debug and print("Checking support for GPU accleration...", flush=True)
             best_device_info = LlamaCPP._get_gpu_info(gpu_optimal_batchsize, layer_size, total_kvcache, activations_token)
             if best_device_info["batch_size"] == 0:
-                self.debug and print("Insufficient GPU memory.")
+                debug and print("Insufficient GPU memory.")
                 best_device_info = None
 
         if not best_device_info:
-            self.debug and print("Skipping GPU acceleration.")
+            debug and print("Skipping GPU acceleration.")
             best_device_info = LlamaCPP._get_cpu_info(cpu_optimal_batchsize, layer_size, total_kvcache, activations_token)
         
         if best_device_info['batch_size'] == 0:
@@ -280,4 +280,5 @@ class LlamaCPP:
         return int(completion_tokens / (end - start))
     
     def supports_gpu_acceleration() -> bool:
-        return CUDA_AVAILABLE
+        best_device_info = LlamaCPP._get_device_info(1, 1, gpu = True, debug = False)
+        return best_device_info['arch'] != 'cpu'
