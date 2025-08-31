@@ -119,12 +119,12 @@ Build automations to improve personal, professional life and improve productivit
 
 #### Llama Wrapper (llama_wrapper.py)
 
-LLaMA wrapper follows a step-by-step process to efficiently allocate resources based on availability, and ensures that the model runs within the memory limits without causing overflow.
+LLaMA wrapper follows a step-by-step process to efficiently allocate resources based on availability, and ensure that the model runs within memory limits without causing overflow.
 
 **Step by Step Flow**:
 1. Detect Available GPUs:
     - It first checks for the presence of Nvidia GPUs with supported architectures: 61, 75, 86, 89, 120
-    - If multiple GPUs exist, it evaluates the best GPU based on free memory. If multiple GPUs have the same free memory, it breaks the tie by checking total memory.
+    - If multiple GPUs exist, it evaluates the best GPU based on free memory. If multiple GPUs have the same free memory, the tie is broken by checking the total memory.
 2. Select Optimal GPU Configuration:
     - Once the best GPU is found, it calculates the optimal batch size and GPU layers and tries not to exceed 80% VRAM usage.
     - Latency penalty is computed to balance batch size with the number of layers that can be loaded into VRAM:
@@ -147,6 +147,26 @@ LLaMA wrapper follows a step-by-step process to efficiently allocate resources b
 - Caching and Loading system prompt
 - Chat with the model
 - Run inference
+
+---
+
+#### SQLite Wrapper (sqlite_wrapper.py)
+
+SQLite wrapper provides a thread-safe interface to manage all database operations.
+
+**Step by Step Flow**:
+1. Enable Write Ahead Logging.
+2. Set Synchronous to Normal.
+3. Turn on Foreign keys.
+
+**Features**:
+- Execute a single SQL query
+- Execute multiple SQL queries in a batch
+- Execute a SQL script file.
+- Execute multiple queries atomically; either all succeed or all fail.
+- Fetch results from a single SQL query
+- Fetch results from multiple SQL queries.
+- Fetch results from a SQL script file.
 
 ---
 
