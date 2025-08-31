@@ -186,6 +186,31 @@ Suggestion Engine Service manages Llama Wrapper and Cache.
 - Option to gracefully close and unload the model.
 - Chat with the model.
 
+#### UsageData Service (usagedata_service.py)
+
+Provides an interface for storing, retrieving, and maintaining usage data in a database through the SQLite Wrapper.
+
+**Step by Step Flow**:
+1. Connect to SQLite Wrapper.
+
+**Features**:
+- Create Schema if not exist. Schema is in sql/schema.sql
+- Day Log Operations:
+  - Add a new day log
+  - Fetch day logs
+  - Count available day logs
+  - Remove the oldest day log
+  - Update the latest day log
+- App Log and Title Log Operations:
+  - Fetch app logs and title logs
+  - Check if specific app names or title names already exist in the database
+  - Upsert the latest app log and title log
+- App Focus Period, Title Focus Period and Downtime Period Operations:
+  - Fetch app focus periods
+  - Fetch title focus periods
+  - Fetch downtime periods
+  - Upsert the latest app focus periods, title focus periods and downtime periods.
+
 ---
 
 Built by someone who just wanted to understand himself, and got carried away by building an AI OS instead. No cap.
