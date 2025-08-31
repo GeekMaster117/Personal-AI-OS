@@ -148,8 +148,6 @@ LLaMA wrapper follows a step-by-step process to efficiently allocate resources b
 - Chat with the model
 - Run inference
 
----
-
 #### SQLite Wrapper (sqlite_wrapper.py)
 
 SQLite wrapper provides a thread-safe interface to manage all database operations.
@@ -167,6 +165,26 @@ SQLite wrapper provides a thread-safe interface to manage all database operation
 - Fetch results from a single SQL query
 - Fetch results from multiple SQL queries.
 - Fetch results from a SQL script file.
+
+---
+
+### Services (Middle Layer)
+
+#### Suggestion Engine Service (suggestion_engine_service.py)
+
+Suggestion Engine Service manages Llama Wrapper and Cache.
+
+**Step by Step Flow**:
+1. Check device configuration:
+    - Check if device_config.json exists
+    - Validates if the file contains compute optimal batchsize for CPU and GPU.
+    - If missing or incomplete, it will raise an error to run the benchmark first.
+2. Initialise Llama Wrapper with compute optimal batchsize for CPU and GPU.
+3. Cache System Prompt.
+
+**Features**:
+- Option to gracefully close and unload the model.
+- Chat with the model.
 
 ---
 
