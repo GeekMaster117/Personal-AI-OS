@@ -66,9 +66,9 @@ C:\Program Files\Microsoft Visual Studio\2022\Community\VC\Auxiliary\Build\vcvar
 ``` shell
 pip install llama-cpp-python --global-option=build_ext --global-option="-G Visual Studio 17 2022" --global-option="-DLLAMA_BUILD_SHARED_LIBS" --global-option="-DLLAMA_CUDA=off" --global-option="-DLLAMA_CURL=off" --global-option="-DCMAKE_BUILD_TYPE=Release"
 ```
-4. Run build.bat to build the project to dist/AI_OS
+4. Go to dev folder and run build.bat to build the project to dist/AI_OS
 ``` shell
-.\dev\build.bat
+.\build.bat
 ```
 
 ## Architecture
