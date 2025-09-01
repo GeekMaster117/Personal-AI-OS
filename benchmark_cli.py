@@ -3,7 +3,7 @@ import sys
 from benchmark import Benchmark
 
 if __name__ == "__main__":
-    mode = sys.argv[1]
+    mode = sys.argv[1] if len(sys.argv) > 1 else "invalid"
 
     if mode == "help":
         print("Usage: python benchmark_cli.py [mode]")
