@@ -42,6 +42,13 @@ An AI Meta Operating System, which monitors your data, gives suggestions based o
 - Your data is stored in data/usagedata.db file. You can choose to delete the file.
 - Your data is managed with **SQLite**. You can use SQLite queries to view, update, and delete data from data/usagedata.db file.
 
+---
+
+## Deep Dive (Technical Details Ahead)
+**You can stop reading here if you just want to use the app. The rest is for developers and curious readers.**
+
+---
+
 ## How to build the Project (In Windows OS)
 
 ### Requirements
@@ -210,6 +217,8 @@ Provides an interface for storing, retrieving, and maintaining usage data in a d
   - Fetch downtime periods
   - Upsert the latest app focus periods, title focus periods and downtime periods.
  
+---
+ 
 ### Sub Systems
 
 #### Suggestion Engine (suggestion_engine.py)
@@ -257,6 +266,8 @@ Usagedata DB manages the storage and integrity of usage data.
 - Get day log.
 - Get app/title log.
 - Get app/title focus log.
+
+---
 
 ### Applications
 
