@@ -1,4 +1,5 @@
 from enum import Enum
+import textwrap
 
 import settings
 from Include.subsystem.usagedata_db import UsagedataDB
@@ -120,6 +121,13 @@ def handle_menu() -> None:
         result = options[choice][1]()
         if result == ExitCodes.EXIT:
             break
+
+prototype_message = textwrap.dedent("""
+=================== Personal AI OS Prototype =======================
+This is an early release. Solid, but still evolving. Explore freely!
+====================================================================
+""")
+print(prototype_message)
 
 usagedataDB = UsagedataDB(settings.usagedata_dir)
 try:

@@ -3,6 +3,7 @@ import requests
 import sys
 import time
 import subprocess
+import textwrap
 
 def download_model(url: str, dest_path: str, retries: int = 3, timeout: int = 30) -> None:
     if os.path.exists(dest_path):
@@ -54,6 +55,13 @@ def benchmark(mode: str) -> None:
     subprocess.run(["benchmark_cli.exe", mode], check=True)
 
 if __name__ == "__main__":
+    prototype_message = textwrap.dedent("""
+    =================== Personal AI OS Prototype =======================
+    This is an early release. Solid, but still evolving. Explore freely!
+    ====================================================================
+    """)
+    print(prototype_message)
+
     with open("requirements/model-requirements.txt", "r") as file:
         for line in file:
             MODEL_URL = line.strip()

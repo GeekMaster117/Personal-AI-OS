@@ -1,5 +1,6 @@
 import time
 import signal
+import textwrap
 
 import Include.app_monitor as app_monitor
 import settings
@@ -18,6 +19,13 @@ def handle_app_data() -> None:
     app_data: dict[str, set[str]] = app_monitor.get_all_apps()
 
     usagedataDB.update_apps(app_data, active_app, active_title)
+
+prototype_message = textwrap.dedent("""
+=================== Personal AI OS Prototype =======================
+This is an early release. Solid, but still evolving. Explore freely!
+====================================================================
+""")
+print(prototype_message)
 
 usagedataDB = UsagedataDB(settings.usagedata_dir)
 signal.signal(signal.SIGINT, shutdown_handler)
