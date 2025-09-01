@@ -137,6 +137,6 @@ class SuggestionEngineService:
         del self._llama
 
     def chat(self, user_prompt: str, suggestion_type: SuggestionType) -> None:
-        max_tokens = 256
+        max_tokens = 350
         stop = ["<|end|>"]
         self._llama.chat(self._get_system_prompt(suggestion_type), user_prompt, max_tokens = max_tokens, stop = stop)
