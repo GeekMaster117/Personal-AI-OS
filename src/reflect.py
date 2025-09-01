@@ -1,8 +1,8 @@
 from enum import Enum
 
 import settings
-from Include.usagedata_db import UsagedataDB
-from Include.suggestion_engine import SuggestionEngine
+from Include.subsystem.usagedata_db import UsagedataDB
+from Include.subsystem.suggestion_engine import SuggestionEngine
 from Include.verify_install import verify_installation
 
 try:

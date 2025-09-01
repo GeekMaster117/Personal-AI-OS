@@ -3,7 +3,7 @@ import signal
 
 import Include.app_monitor as app_monitor
 import settings
-from Include.usagedata_db import UsagedataDB
+from Include.subsystem.usagedata_db import UsagedataDB
 from Include.verify_install import verify_installation
 
 try:
