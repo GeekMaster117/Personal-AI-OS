@@ -91,8 +91,7 @@ class SuggestionEngineService:
         - Provide up to 5 suggestions only if fully justified by the app data.
         - Each suggestion can be up to 2 sentences.
         - If unsure about correctness, do not provide a suggestion.
-        - Stop after providing the suggestions.
-        """)
+        - Stop after providing the suggestions.""")
     
     def _get_routine_suggestion_system_prompt(self) -> str:
         prompt = textwrap.dedent(f"""
@@ -139,5 +138,5 @@ class SuggestionEngineService:
 
     def chat(self, user_prompt: str, suggestion_type: SuggestionType) -> None:
         max_tokens = 256
-        stop = ["Not enough data to make suggestions", "<|end|>"]
+        stop = ["<|end|>"]
         self._llama.chat(self._get_system_prompt(suggestion_type), user_prompt, max_tokens = max_tokens, stop = stop)
