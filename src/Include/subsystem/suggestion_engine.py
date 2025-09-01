@@ -1,20 +1,15 @@
 import threading
 import heapq
 import textwrap
-from enum import Enum
 from datetime import datetime
 
 from Include.subsystem.usagedata_db import UsagedataDB
 from Include.service.suggestion_engine_service import SuggestionEngineService
+from Include.service.suggestion_engine_service import SuggestionType
 from Include.loading_spinner import loading_spinner
 import settings
 
 class SuggestionEngine:
-    class SuggestionType(Enum):
-        ROUTINE = "routine"
-        PRODUCTIVITY = "productivity"
-        PERSONAL = "personal"
-
     def __init__(self, db_handler: UsagedataDB):
         try:
             self._service = SuggestionEngineService()
@@ -261,4 +256,4 @@ class SuggestionEngine:
             {len(self._day_log_ids) - 1 - i} Day(s) Back App Data Summary:""")
             user_prompt += self.preprocessed_logs[self._day_log_ids[i]]
 
-        self._service.chat(user_prompt)
+        self._service.chat(user_prompt, suggestion_type)

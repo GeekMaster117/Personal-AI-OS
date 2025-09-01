@@ -3,6 +3,7 @@ from enum import Enum
 import settings
 from Include.subsystem.usagedata_db import UsagedataDB
 from Include.subsystem.suggestion_engine import SuggestionEngine
+from Include.service.suggestion_engine_service import SuggestionType
 from Include.verify_install import verify_installation
 
 try:
@@ -47,7 +48,7 @@ def wait_until_preprocessed_logs() -> None:
 def handle_routine_suggestions() -> ExitCodes:
     try:
         wait_until_preprocessed_logs()
-        suggestion_engine.generate_suggestions(SuggestionEngine.SuggestionType.ROUTINE)
+        suggestion_engine.generate_suggestions(SuggestionType.ROUTINE)
     except Exception as e:
         raise RuntimeError(f"Error handling routine suggestions: {e}")
 
@@ -58,7 +59,7 @@ def handle_routine_suggestions() -> ExitCodes:
 def handle_productivity_suggestions() -> ExitCodes:
     try:
         wait_until_preprocessed_logs()
-        suggestion_engine.generate_suggestions(SuggestionEngine.SuggestionType.PRODUCTIVITY)
+        suggestion_engine.generate_suggestions(SuggestionType.PRODUCTIVITY)
     except Exception as e:
         raise RuntimeError(f"Error handling productivity suggestions: {e}")
 
@@ -69,7 +70,7 @@ def handle_productivity_suggestions() -> ExitCodes:
 def handle_personal_suggestions() -> ExitCodes:
     try:
         wait_until_preprocessed_logs()
-        suggestion_engine.generate_suggestions(SuggestionEngine.SuggestionType.PERSONAL)
+        suggestion_engine.generate_suggestions(SuggestionType.PERSONAL)
     except Exception as e:
         raise RuntimeError(f"Error handling personal suggestions: {e}")
 

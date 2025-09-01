@@ -2,10 +2,15 @@ import os
 import json
 import threading
 import textwrap
+from enum import Enum
 
 from Include.wrapper.llama_wrapper import LlamaCPP
 from Include.loading_spinner import loading_spinner
-import settings
+
+class SuggestionType(Enum):
+    ROUTINE = "routine"
+    PRODUCTIVITY = "productivity"
+    PERSONAL = "personal"
 
 class SuggestionEngineService:
     def __init__(self):
@@ -47,29 +52,14 @@ class SuggestionEngineService:
             spinner_thread.join()
 
         return llama
-
-    def _get_system_prompt(self) -> str:
+    
+    def _get_system_prompt_prefix(self) -> str:
         return textwrap.dedent(f"""
         You are a Personal AI Meta Operating System that gives user suggestions based on their app data. You speak warmly and professionally.
-
-        You can generate suggestions in three categories:
-        1. Routine: 
-        - Focus on usage patterns and time distribution. 
-        - Describe when and how consistently apps/titles are used, or when idle recovery occurs. 
-        - Keep this observational.
-                            
-        2. Personal: 
-        - Focus on frequent distractions, late-night sessions, and work-life balance.
-        - Suggest small lifestyle adjustments, like taking breaks or avoiding late-night sessions.
-        - Keep it constructive.
-                            
-        3. Productivity:
-        - Focus on active hours, interruptions, and context-switching patterns.
-        - Suggest workflow adjustments, like longer uninterrupted blocks or protecting peak focus hours for deep work.
-        - Keep it practical.
-
-        User will ask you to generate suggestions based on ANY ONE OF THE CATEGORIES above based on the app data provided, with Current Day App Data and Historical App Data Summary.
-
+        """)
+    
+    def _get_system_prompt_suffix(self) -> str:
+        return textwrap.dedent(f"""
         You will be given Current Day App Data in the following format:
             Date created: 2025-07-23T19:22:45.123456 in the format of YYYY-MM-DDTHH:MM:SS.ffffff
             Top Apps and their Top Titles:
@@ -98,19 +88,56 @@ class SuggestionEngineService:
         - Only use the data present in the app. Never assume, hallucinate, or infer missing data.
         - If the app data is insufficient, respond exactly: "Not enough data to make suggestions."
         - Do not provide general tips, opinions, or information outside the app data.
-        - End the response with <END>
-
-        Suggestion Instructions:
         - Provide up to 5 suggestions only if fully justified by the app data.
         - Each suggestion can be up to 2 sentences.
         - If unsure about correctness, do not provide a suggestion.
         - Stop after providing the suggestions.
         """)
+    
+    def _get_routine_suggestion_system_prompt(self) -> str:
+        prompt = textwrap.dedent(f"""
+            You will be asked to provide Routine Suggestions, with Current Day App Data and Historical Day(s) App Data Summary:
+            - Focus on usage patterns and time distribution.
+            - Describe when and how consistently apps/titles are used, or when idle recovery occurs.
+            - Keep this observational.
+        """)
+
+        return self._get_system_prompt_prefix() + prompt + self._get_system_prompt_suffix()
+
+    def _get_personal_suggestion_system_prompt(self) -> str:
+        prompt = textwrap.dedent(f"""
+            You will be asked to provide Personal Suggestions, with Current Day App Data and Historical Day(s) App Data Summary:
+            - Focus on frequent distractions, late-night sessions, and work-life balance.
+            - Suggest small lifestyle adjustments, like taking breaks or avoiding late-night sessions.
+            - Keep it constructive.
+        """)
+
+        return self._get_system_prompt_prefix() + prompt + self._get_system_prompt_suffix()
+
+    def _get_productivity_suggestion_system_prompt(self) -> str:
+        prompt = textwrap.dedent(f"""
+            You will be asked to provide Productivity Suggestions, with Current Day App Data and Historical Day(s) App Data Summary:
+            - Focus on active hours, interruptions, and context-switching patterns.
+            - Suggest workflow adjustments, like longer uninterrupted blocks or protecting peak focus hours for deep work.
+            - Keep it practical.
+        """)
+
+        return self._get_system_prompt_prefix() + prompt + self._get_system_prompt_suffix()
+    
+    def _get_system_prompt(self, suggestion_type: SuggestionType) -> str:
+        if suggestion_type == SuggestionType.ROUTINE:
+            return self._get_routine_suggestion_system_prompt()
+        elif suggestion_type == SuggestionType.PRODUCTIVITY:
+            return self._get_productivity_suggestion_system_prompt()
+        elif suggestion_type == SuggestionType.PERSONAL:
+            return self._get_personal_suggestion_system_prompt()
+        else:
+            raise ValueError("Invalid SuggestionType provided.")
 
     def close(self):
         del self._llama
 
-    def chat(self, user_prompt: str) -> None:
+    def chat(self, user_prompt: str, suggestion_type: SuggestionType) -> None:
         max_tokens = 256
         stop = ["Not enough data to make suggestions", "<|end|>"]
-        self._llama.chat(self._get_system_prompt(), user_prompt, max_tokens = max_tokens, stop = stop)
+        self._llama.chat(self._get_system_prompt(suggestion_type), user_prompt, max_tokens = max_tokens, stop = stop)
