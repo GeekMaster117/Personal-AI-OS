@@ -242,10 +242,8 @@ class LlamaCPP:
         self._save_sys_cache(system_prompt, cache_dir)
         self._load_sys_cache(cache_dir)
 
-    def chat(self, user_prompt: str) -> None:
-        messages = [
-            {"role": "user", "content": user_prompt}
-        ]
+    def chat(self, system_prompt: str, user_prompt: str, max_tokens: int = 128, stop: list[str] = [], temperature: float = 0.7, top_p: float = 0.9) -> None:
+        full_prompt = f"<|system|>{system_prompt}<|end|>\n<|user|>{user_prompt}<|end|>\n<|assistant|>"
 
         spinner_flag = {'running': True}
         spinner_thread = threading.Thread(
@@ -256,15 +254,20 @@ class LlamaCPP:
         spinner_thread.start()
 
         first_chunk = True
-        for chunk in self.llm.create_chat_completion(messages=messages, temperature=0.7, top_p=0.9, stream=True):
+        for chunk in self.llm.create_completion(
+            prompt = full_prompt,
+            max_tokens = max_tokens,
+            stop = stop,
+            temperature = temperature,
+            top_p = top_p, 
+            stream = True):
             if first_chunk:
                 spinner_flag['running'] = False
                 spinner_thread.join()
                 first_chunk = False
                 print("LLM: ", end='', flush=True)
 
-            delta = chunk["choices"][0]["delta"]
-            content = delta.get("content", "")
+            content = chunk["choices"][0]['text']
             print(content, end='', flush=True)
         print("\n")
 
