@@ -258,6 +258,35 @@ Usagedata DB manages the storage and integrity of usage data.
 - Get app/title log.
 - Get app/title focus log.
 
+### Applications
+
+#### Reflect (reflect.py):
+
+Get different types of suggestions, based on usage data.
+
+**Step by Step Flow**:
+1. Check if installation has been completed, throw an error if not:
+``` shell
+Installation verification failed: <reason>
+Please run install.exe
+```
+2. Connect to Suggestion Engine:
+    - Request it to preprocess logs.
+3. Open Menu:
+    - Show available suggestion types (Routine, Personal, Productivity).
+4. Generate Suggestion:
+    - Send a signal to Suggestion Engine to generate the requested suggestion.
+  
+#### Observe (observe.py):
+
+Monitor usage data to get suggestions.
+
+**Step by Step Flow**:
+1. Connect to Usagedata DB.
+2. Fetch currently open apps/titles and the active app/title.
+3. Upsert data to Usagedata DB.
+4. Sleep briefly, and repeat until a shutdown signal is received.
+
 ---
 
 Built by someone who just wanted to understand himself, and got carried away by building an AI OS instead. No cap.
