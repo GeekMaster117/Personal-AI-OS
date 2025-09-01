@@ -89,7 +89,7 @@ Track how you spend time across your computer.
 
 ### Reflect
 
-Suggest ways to improve routine, personal and professional life along with productivity insights.
+Suggests ways to improve routine, personal and professional life along with productivity insights.
 
 - **Routine Suggestions** – Suggestions on things you do often with a hidden or visible pattern.
 
@@ -115,11 +115,11 @@ Build automations to improve personal, professional life and improve productivit
 
 ## Core Logic
 
-### Wrappers (Low-Level Components)
+### Wrappers
 
 #### Llama Wrapper (llama_wrapper.py)
 
-LLaMA wrapper follows a step-by-step process to efficiently allocate resources based on availability, and ensure that the model runs within memory limits without causing overflow.
+LLaMA wrapper efficiently allocates resources based on availability, and ensures that the model runs within memory limits without causing overflow.
 
 **Step by Step Flow**:
 1. Detect Available GPUs:
@@ -168,7 +168,7 @@ SQLite wrapper provides a thread-safe interface to manage all database operation
 
 ---
 
-### Services (Middle Layer)
+### Services
 
 #### Suggestion Engine Service (suggestion_engine_service.py)
 
@@ -177,10 +177,9 @@ Suggestion Engine Service manages Llama Wrapper and Cache.
 **Step by Step Flow**:
 1. Check device configuration:
     - Check if device_config.json exists
-    - Validates if the file contains compute optimal batchsize for CPU and GPU.
+    - Validates if the file contains compute optimal batch size for CPU and GPU.
     - If missing or incomplete, it will raise an error to run the benchmark first.
-2. Initialise Llama Wrapper with compute optimal batchsize for CPU and GPU.
-3. Cache System Prompt.
+2. Initialise Llama Wrapper with compute optimal batch size for CPU and GPU.
 
 **Features**:
 - Option to gracefully close and unload the model.
@@ -210,6 +209,54 @@ Provides an interface for storing, retrieving, and maintaining usage data in a d
   - Fetch title focus periods
   - Fetch downtime periods
   - Upsert the latest app focus periods, title focus periods and downtime periods.
+ 
+### Sub Systems
+
+#### Suggestion Engine (suggestion_engine.py)
+
+Suggestion Engine preprocesses data in the Usagedata DB and generates suggestions.
+
+**Step by Step Flow**:
+1. Connect to Suggestion Engine Service.
+2. Connect to Usagedata DB:
+    - if no data is available in Usagedata DB, throws an error:
+    ``` shell
+    No day logs found in the database.
+    ```
+3. Preprocess data in Usagedata DB with multithreading:
+    - Current day data is processed in detail.
+    - Previous days’ data is processed in a condensed format.
+  
+**Features**:
+- Generate Suggestions
+
+#### Usagedata DB (usagedata_db.py)
+
+Usagedata DB manages the storage and integrity of usage data.
+
+**Step by Step Flow**:
+1. Check database File:
+    - Verifies if the database file exists.
+    - If not, create a new database file.
+2. Connect to UsageData Service.
+3. Create schema if not exist.
+4. Ensure Log Integrity:
+    - Checks if the latest day log matches the current date.
+    - If not, create a new log for the current date.
+    - Verifies if the number of logs exceeds the configured limit.
+    - If exceeded, it deletes the oldest logs until within the limit.
+  
+**Features**:
+- Update Apps Titles:
+  - Check if the drift between monotonic anchor and time anchor is too high, then increment the total anomalies counter and re-anchor both.
+  - Check if the difference between current monotonic and last updated monotonic is too large, then log downtime for that period.
+  - Update focus period for active app/title and total duration for all open apps/titles.
+  - If switched apps/titles, then increment focus count for the active app/title.
+  - Set last updated monotonic to current monotonic.
+- Get day log IDs.
+- Get day log.
+- Get app/title log.
+- Get app/title focus log.
 
 ---
 
