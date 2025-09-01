@@ -4,7 +4,7 @@ import textwrap
 from enum import Enum
 from datetime import datetime
 
-from Include.usagedata_db import UsagedataDB
+from Include.subsystem.usagedata_db import UsagedataDB
 from Include.service.suggestion_engine_service import SuggestionEngineService
 from Include.loading_spinner import loading_spinner
 import settings
@@ -145,24 +145,36 @@ class SuggestionEngine:
             return
 
         summary += textwrap.dedent(f"""
-        Top {settings.data_limit} Apps and their Top {settings.data_limit} Titles:
+        Top {len(apps_titles)} Apps and their Top Titles:
         """)
 
         for i, (app_name, app_data) in enumerate(apps_titles.items()):
             summary += textwrap.dedent(f""" 
             {i + 1}. {app_name}:
-            - Total Focus Duration: {self._round_off(app_data['total_focus_duration'])}
             - Total Duration: {self._round_off(app_data['total_duration'])}
-            - Hourly Focus Data: [{', '.join(f"{self._twelvehour_format(int(hour))}: {self._round_off(attributes['focus_duration'])}" for hour, attributes in app_data['hourly_focus_data'].items())}]""")
+            - Total Focus Duration: {self._round_off(app_data['total_focus_duration'])}""")
+            if app_data['hourly_focus_data']:
+                summary += textwrap.dedent(f"""
+                - Hourly Focus Data: [{', '.join(f"{self._twelvehour_format(int(hour))}: {self._round_off(attributes['focus_duration'])}" for hour, attributes in app_data['hourly_focus_data'].items())}]
+                """)
+            else:
+                summary += textwrap.dedent(f"""
+                - Hourly Focus Data: No data available
+                """)
 
             for j, (title_name, title_data) in enumerate(app_data["titles"].items()):
                 summary += textwrap.dedent(f"""
-                - {i + 1}.{j + 1}. {title_name}:
-                -- Total Focus Duration: {self._round_off(title_data['total_focus_duration'])}
-                -- Total Duration: {self._round_off(title_data['total_duration'])}
-                -- Hourly Focus Data: [{', '.join(f"{self._twelvehour_format(int(hour))}: {self._round_off(attributes['focus_duration'])}" for hour, attributes in title_data['hourly_focus_data'].items())}]""")
-            
-            summary += "\n"
+                {i + 1}.{j + 1}. {title_name}:
+                - Total Duration: {self._round_off(title_data['total_duration'])}
+                - Total Focus Duration: {self._round_off(title_data['total_focus_duration'])}""")
+                if title_data['hourly_focus_data']:
+                    summary += textwrap.dedent(f"""
+                    - Hourly Focus Data: [{', '.join(f"{self._twelvehour_format(int(hour))}: {self._round_off(attributes['focus_duration'])}" for hour, attributes in title_data['hourly_focus_data'].items())}]
+                    """)
+                else:
+                    summary += textwrap.dedent(f"""
+                    - Hourly Focus Data: No data available
+                    """)
 
         self.preprocessed_logs[day_log_id] = summary
 
@@ -179,13 +191,18 @@ class SuggestionEngine:
             return
 
         summary += textwrap.dedent(f"""
-        Top {settings.data_limit} Apps
+        Top {len(apps)} Apps
         """)
 
         for i, (app_name, app_data) in enumerate(apps.items()):
-            summary += textwrap.dedent(f"""
-            {i + 1}. {app_name}: {app_data['aggregated_focus_duration']}
-            """)
+            if app_data["aggregated_focus_duration"]:
+                summary += textwrap.dedent(f"""
+                {i + 1}. {app_name}: {app_data['aggregated_focus_duration']}
+                """)
+            else:
+                summary += textwrap.dedent(f"""
+                {i + 1}. {app_name}: No data available
+                """)
 
         self.preprocessed_logs[day_log_id] = summary
 

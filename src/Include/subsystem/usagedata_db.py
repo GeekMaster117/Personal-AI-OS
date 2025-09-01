@@ -37,7 +37,7 @@ class UsagedataDB:
         self._service.add_day_log(today, now_monotonic)
 
     def _ensure_max_logs(self) -> None:
-        if self._service.get_day_log_row_count() > settings.max_logs:
+        while self._service.get_day_log_row_count() > settings.max_logs:
             self._service.remove_oldest_day_log()
 
     def _convert_mono_to_time(self, monotonic_anchor: float, datetime_compare: str, monotonic_time: float) -> datetime.time:
