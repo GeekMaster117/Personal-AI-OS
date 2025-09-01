@@ -9,7 +9,7 @@ from Include.verify_install import verify_installation
 try:
     verify_installation()
 except Exception as e:
-    print(f"Installation verification failed: {e}. Please run install.exe")
+    print(f"Installation verification failed: {e}\nPlease run install.exe")
 
     input("\nPress any key to exit...")
     exit(1)

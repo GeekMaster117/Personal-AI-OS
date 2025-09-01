@@ -7,7 +7,7 @@ import settings
 
 class UsagedataDB:
     def __init__(self, usagedata_dir: str):
-        usagedata_dir = Path(usagedata_dir)
+        usagedata_dir: Path = Path(usagedata_dir)
         usagedata_dir.mkdir(parents=True, exist_ok=True)
 
         self.db_path: Path = usagedata_dir / "usagedata.db"
