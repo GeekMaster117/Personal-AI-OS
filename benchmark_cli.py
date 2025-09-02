@@ -7,15 +7,6 @@ import sys
 from benchmark import Benchmark
 
 if __name__ == "__main__":
-    prototype_message = textwrap.dedent("""
-    =================== Personal AI OS Prototype ==================================================
-    This is an early release. Solid, but still evolving. Explore freely!
-                                        
-    Oh!! You're actually exploring this deep, your curiosity for being a 'GEEK' won't go unrewarded
-    ===============================================================================================
-    """)
-    print(prototype_message)
-
     mode = sys.argv[1] if len(sys.argv) > 1 else "invalid"
 
     if mode == "help":
@@ -23,6 +14,8 @@ if __name__ == "__main__":
         print("Modes:")
         print("  cpu: Run CPU benchmark")
         print("  gpu: Run GPU benchmark")
+        print()
+        print("Oh!! You're actually exploring this deep, your curiosity for being a 'GEEK' won't go unrewarded")
     elif mode == "cpu":
         try:
             Benchmark.config_cpu_optimal_batchsize()
@@ -73,7 +66,7 @@ if __name__ == "__main__":
         ██║  ███╗█████╗  █████╗  █████╔╝ ██╔████╔██║███████║███████╗   ██║   █████╗  ██████╔╝╚██║╚██║    ██╔╝
         ██║   ██║██╔══╝  ██╔══╝  ██╔═██╗ ██║╚██╔╝██║██╔══██║╚════██║   ██║   ██╔══╝  ██╔══██╗ ██║ ██║   ██╔╝ 
         ╚██████╔╝███████╗███████╗██║  ██╗██║ ╚═╝ ██║██║  ██║███████║   ██║   ███████╗██║  ██║ ██║ ██║   ██║  
-         ╚═════╝ ╚══════╝╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝╚═╝  ╚═╝╚══════╝   ╚═╝   ╚══════╝╚═╝  ╚═╝ ╚═╝ ╚═╝   ╚═╝                                                                                         
+         ╚═════╝ ╚══════╝╚══════╝╚═╝  ╚═╝╚═╝     ╚═╝╚═╝  ╚═╝╚══════╝   ╚═╝   ╚══════╝╚═╝  ╚═╝ ╚═╝ ╚═╝   ╚═╝
         """)
         print(banner)
     else:
