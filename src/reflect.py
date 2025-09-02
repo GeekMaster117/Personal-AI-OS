@@ -18,13 +18,9 @@ except Exception as e:
 class ExitCodes(Enum):
     EXIT = -1
     CONTINUE = 0
-    BACK = 1
 
 def exit_program() -> ExitCodes:
     return ExitCodes.EXIT
-
-def back_program() -> ExitCodes:
-    return ExitCodes.BACK
 
 def handle_options(options: list[str]) -> int:
     while True:
@@ -80,37 +76,11 @@ def handle_personal_suggestions() -> ExitCodes:
     return ExitCodes.CONTINUE
 
 # Suggestions handler
-def handle_suggestions() -> ExitCodes:
+def handle_menu() -> None:
     options = [
         ("Routine Suggestions", handle_routine_suggestions), 
         ("Productivity Suggestions", handle_productivity_suggestions), 
         ("Personal Suggestions", handle_personal_suggestions),
-        ("Back to Main Menu", back_program), 
-        ("Exit", exit_program)
-    ]
-
-    while True:
-        choice = handle_options(options)
-        print("-----------------------------")
-
-        result = options[choice][1]()
-        if result == ExitCodes.EXIT:
-            return ExitCodes.EXIT
-        elif result == ExitCodes.BACK:
-            break
-
-    return ExitCodes.CONTINUE
-
-# Automation handler
-def handle_automation() -> ExitCodes:
-    print("Automation handling is not yet implemented.")
-    return ExitCodes.CONTINUE
-
-# Main menu handler
-def handle_menu() -> None:
-    options = [
-        ("Get Suggestions", handle_suggestions), 
-        ("Build Automations", handle_automation), 
         ("Exit", exit_program)
     ]
 
@@ -140,7 +110,7 @@ except Exception as e:
 
 suggestion_engine.preprocess_logs()
 
-print("What would you like to do?")
+print("What would you like to get?")
 
 try:
     handle_menu()
