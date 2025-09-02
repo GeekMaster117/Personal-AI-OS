@@ -3,6 +3,7 @@ import json
 import threading
 import textwrap
 from enum import Enum
+import settings
 
 from Include.wrapper.llama_wrapper import LlamaCPP
 from Include.loading_spinner import loading_spinner
@@ -88,7 +89,7 @@ class SuggestionEngineService:
         - Only use the data present in the app. Never assume, hallucinate, or infer missing data.
         - If the app data is insufficient, respond exactly: "Not enough data to make suggestions."
         - Do not provide general tips, opinions, or information outside the app data.
-        - Provide up to 5 suggestions only if fully justified by the app data.
+        - Provide up to {settings.data_limit} suggestions only if fully justified by the app data.
         - Each suggestion can be up to 2 sentences.
         - If unsure about correctness, do not provide a suggestion.
         - Stop after providing the suggestions.""")
@@ -137,6 +138,6 @@ class SuggestionEngineService:
         del self._llama
 
     def chat(self, user_prompt: str, suggestion_type: SuggestionType) -> None:
-        max_tokens = 350
+        max_tokens = 256
         stop = ["<|end|>"]
         self._llama.chat(self._get_system_prompt(suggestion_type), user_prompt, max_tokens = max_tokens, stop = stop)

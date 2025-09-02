@@ -192,12 +192,11 @@ class SuggestionEngine:
         for i, (app_name, app_data) in enumerate(apps.items()):
             if app_data["aggregated_focus_duration"]:
                 summary += textwrap.dedent(f"""
-                {i + 1}. {app_name}: {app_data['aggregated_focus_duration']}
-                """)
+                {i + 1}. {app_name}: {app_data['aggregated_focus_duration']}""")
             else:
                 summary += textwrap.dedent(f"""
-                {i + 1}. {app_name}: No data available
-                """)
+                {i + 1}. {app_name}: No data available""")
+        summary += "\n"
 
         self.preprocessed_logs[day_log_id] = summary
 
@@ -249,11 +248,11 @@ class SuggestionEngine:
         user_prompt += self.preprocessed_logs[self._day_log_ids[-1]]
 
         if len(self._day_log_ids) == 1:
-            user_prompt += "No historical data available."
+            user_prompt += "\nNo historical data available."
+        else:
+            user_prompt += f"\n{len(self._day_log_ids) - 1} Day(s) Historical App Data Summary:"
 
         for i in range(len(self._day_log_ids) - 2, -1, -1):
-            user_prompt += textwrap.dedent(f"""
-            {len(self._day_log_ids) - 1 - i} Day(s) Back App Data Summary:""")
             user_prompt += self.preprocessed_logs[self._day_log_ids[i]]
 
         self._service.chat(user_prompt, suggestion_type)
