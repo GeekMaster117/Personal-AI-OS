@@ -137,7 +137,35 @@ class SuggestionEngineService:
     def close(self):
         del self._llama
 
-    def chat(self, user_prompt: str, suggestion_type: SuggestionType) -> None:
-        max_tokens = 256
+    def chat(self, 
+            user_prompt: str, 
+            suggestion_type: SuggestionType, 
+            removable_suffixes: list[str] = [], 
+            no_suffix_attached_message: str = "",
+            any_suffix_attached_message: str = "") -> None:
+        output_max_tokens = 256
+        system_tokens = self._llama.get_token_count(self._get_system_prompt(suggestion_type))
+        user_tokens = self._llama.get_token_count(user_prompt)
+
+        available_tokens = settings.model_window_size - (output_max_tokens + system_tokens + user_tokens)
+
+        suffix_tokens = 0
+        suffix_count = 0
+        for suffix in removable_suffixes:
+            tokens = self._llama.get_token_count(suffix)
+            if suffix_tokens + tokens <= available_tokens:
+                suffix_tokens += tokens
+                suffix_count += 1
+            else:
+                break
+
+        if suffix_count == 0:
+            user_prompt += no_suffix_attached_message
+        else:
+            user_prompt += any_suffix_attached_message
+
+        for i in range(suffix_count):
+            user_prompt += removable_suffixes[i]
+
         stop = ["<|end|>"]
-        self._llama.chat(self._get_system_prompt(suggestion_type), user_prompt, max_tokens = max_tokens, stop = stop)
+        self._llama.chat(self._get_system_prompt(suggestion_type), user_prompt, max_tokens = output_max_tokens, stop = stop)

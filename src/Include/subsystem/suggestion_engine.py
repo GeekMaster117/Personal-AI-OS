@@ -247,12 +247,12 @@ class SuggestionEngine:
         Current Day App Data:""")
         user_prompt += self.preprocessed_logs[self._day_log_ids[-1]]
 
-        if len(self._day_log_ids) == 1:
-            user_prompt += "\nNo historical data available."
-        else:
-            user_prompt += f"\n{len(self._day_log_ids) - 1} Day(s) Historical App Data Summary:"
+        removable_suffixes = [self.preprocessed_logs[self._day_log_ids[i]] for i in range(len(self._day_log_ids) - 2, -1, -1)]
 
-        for i in range(len(self._day_log_ids) - 2, -1, -1):
-            user_prompt += self.preprocessed_logs[self._day_log_ids[i]]
-
-        self._service.chat(user_prompt, suggestion_type)
+        self._service.chat(
+            user_prompt, 
+            suggestion_type, 
+            removable_suffixes,
+            no_suffix_attached_message = "\nNo historical data available.",
+            any_suffix_attached_message = "\nDay(s) Historical Day(s) App Data Summary:"
+        )
