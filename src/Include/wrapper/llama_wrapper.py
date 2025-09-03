@@ -269,7 +269,7 @@ class LlamaCPP:
 
             content = chunk["choices"][0]['text']
             print(content, end='', flush=True)
-        print("\n")
+        print()
 
     def run_inference(self, test_prompt: str, max_tokens: int) -> int:
         start = time.monotonic()
@@ -281,6 +281,9 @@ class LlamaCPP:
 
         #Returns tokens processed per second
         return int(completion_tokens / (end - start))
+    
+    def get_token_count(self, prompt: str) -> int:
+        return len(self.llm.tokenize(prompt.encode('utf-8')))
     
     def supports_gpu_acceleration() -> bool:
         best_device_info = LlamaCPP._get_device_info(1, 1, gpu = True, debug = False)
