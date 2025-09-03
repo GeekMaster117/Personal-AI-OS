@@ -154,6 +154,7 @@ LLaMA wrapper efficiently allocates resources based on availability, and ensures
 - Caching and Loading system prompt
 - Chat with the model
 - Run inference
+- Get token count for prompt
 
 #### SQLite Wrapper (sqlite_wrapper.py)
 
@@ -191,6 +192,7 @@ Suggestion Engine Service manages Llama Wrapper and Cache.
 **Features**:
 - Option to gracefully close and unload the model.
 - Chat with the model.
+  - Dynamically cut user prompt suffixes to fit context window size.
 
 #### UsageData Service (usagedata_service.py)
 
