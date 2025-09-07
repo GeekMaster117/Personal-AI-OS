@@ -5,3 +5,5 @@ pycuda
 pyinstaller
 pypickle
 db-sqlite3
+RapidFuzz
+scikit-learn
