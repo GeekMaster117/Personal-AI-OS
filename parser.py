@@ -2,6 +2,7 @@ import os
 
 import json
 import joblib
+import hashlib
 
 from numpy import ndarray
 from collections import defaultdict, Counter
@@ -13,6 +14,7 @@ from sklearn.pipeline import Pipeline, make_pipeline
 
 class Parser:
     commands_path: str = "commands.json"
+    commands_hash_path: str = "commands_hash.txt"
     vectorizer_path: str = "vectorizer.bin"
     classifier_path: str = "classifier.bin"
 
@@ -30,6 +32,29 @@ class Parser:
         self._vectorizer: CountVectorizer = model[1]
         self._classifier: SGDClassifier = model[2]
 
+    def _get_commands_hash(self) -> str:
+        with open(Parser.commands_path, 'r') as file:
+            data = json.load(file)
+        data_str = json.dumps(data, sort_keys=True)
+        
+        return hashlib.md5(data_str.encode('utf-8')).hexdigest()
+
+    def _save_commands_hash(self) -> None:
+        with open(Parser.commands_hash_path, "w") as file:
+            file.write(self._get_commands_hash())
+
+    def _load_commands_hash(self) -> str | None:
+        if not os.path.exists(Parser.commands_hash_path):
+            return None
+        with open(Parser.commands_hash_path, "r") as file:
+            return file.read().strip()
+
+    def _check_commands_hash(self) -> bool:
+        saved_hash = self._load_commands_hash()
+        if not saved_hash or self._get_commands_hash() != saved_hash:
+            return False
+        return True
+
     def _load_vectorizer(self) -> CountVectorizer | None:
         if not os.path.exists(Parser.vectorizer_path):
             return None
@@ -41,14 +66,19 @@ class Parser:
         return joblib.load(Parser.classifier_path)
     
     def _load_model(self) -> tuple:
-        vectorizer = self._load_vectorizer()
-        classifier = self._load_classifier()
+        try:
+            vectorizer = self._load_vectorizer()
+            classifier = self._load_classifier()
+        except:
+            vectorizer, classifier = None, None
 
-        if not vectorizer or not classifier:
+        if not vectorizer or not classifier or not self._check_commands_hash():
             vectorizer = CountVectorizer()
             classifier = SGDClassifier(loss="log_loss")
             model = self._init_train(vectorizer, classifier), vectorizer, classifier
+            
             self._save_model(vectorizer, classifier)
+            self._save_commands_hash()
 
             return model
         return make_pipeline(vectorizer, classifier), vectorizer, classifier
@@ -102,7 +132,7 @@ class Parser:
         
         return actions_normalised
 
-    def extract_most_probable_action(self, actions_normalised: dict, probability_cutoff: float) -> str | None:
+    def extract_action_frequency(self, actions_normalised: dict, probability_cutoff: float) -> str | None:
         if probability_cutoff < 0 or probability_cutoff > 1:
             raise ValueError(f"Probability cutoff must be in the interval [0, 1], value passed: {probability_cutoff}")
 
@@ -129,40 +159,50 @@ class Parser:
 
         self._save_model(self._vectorizer, self._classifier)
 
+    def get_action(self, query: str, probability_cutoff: float = 0.85) -> str:
+        tokens: list[str] = query.lower().split()
+        keywords = self.extract_keywords(tokens, probability_cutoff)
+        if not keywords:
+            raise SyntaxError("Unable to parse the query")
+        
+        actions_normalised: dict = self.extract_actions_normalised(keywords)
+
+        action = self.extract_action_frequency(actions_normalised, 0.85)
+        if not action:
+            actions = self.extract_actions_classification(keywords, 5)
+            if actions[0][1] >= 0.85:
+                action = actions[0][0]
+            else:
+                print("What do you want to do?")
+                for i, action in enumerate(actions):
+                    print(f"{i + 1}. {self.commands[action[0]]["description"]}")
+                answer = int(input(f"Enter answer ({1}-{len(actions)}): "))
+
+                self.train(keywords, actions[answer - 1][0])
+                action = actions[answer - 1][0]
+
+        return action
+    
+    def execute_action(self, action) -> None:
+        if self.commands[action]["warning"] == True:
+            answer = input(f"Do you want to, {self.commands[action]["description"]} (Y/N): ").lower()
+            if answer != 'y':
+                print("Skipping request...")
+                return
+            
+        #Todo: Execute Command
+
 parser: Parser = Parser()
 
 query: str = input("Enter request: ")
-tokens: list[str] = query.lower().split()
-
-keywords: list[str] | None = None
+action: str | None = None
 while True:
-    keywords = parser.extract_keywords(tokens, 0.85)
-    if keywords:
-        break
+    try:
+        action = parser.get_action(query)
+    except:
+        query = input("Unable to parse. Enter again: ")
+        continue
     
-    query = input("Unable to parse. Enter again: ")
-    tokens = query.lower().split()
+    break
 
-actions_normalised: dict = parser.extract_actions_normalised(keywords)
-
-possible_action = parser.extract_most_probable_action(actions_normalised, 0.85)
-if not possible_action:
-    actions = parser.extract_actions_classification(keywords, 5)
-    if actions[0][1] >= 0.85:
-        possible_action = actions[0][0]
-    else:
-        print("What do you want to do?")
-        for i, action in enumerate(actions):
-            print(f"{i + 1}. {parser.commands[action[0]]["description"]}")
-        answer = int(input(f"Enter answer ({1}-{len(actions)}): "))
-
-        parser.train(keywords, actions[answer - 1][0])
-        possible_action = actions[answer - 1][0]
-
-if parser.commands[possible_action]["warning"] == True:
-    answer = input(f"Do you want to, {parser.commands[possible_action]["description"]} (Y/N): ").lower()
-    if answer != 'y':
-        print("Skipping request...")
-        exit()
-
-#Todo: Execute Command
+parser.execute_action(action)
