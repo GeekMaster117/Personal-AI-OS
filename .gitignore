@@ -213,7 +213,10 @@ pyvenv.cfg
 data/
 models/
 cache/
-*.json
 *.bin
+
+# Custom Ignore Files
+device_config.json
+commands_hash.txt
 
 .vscode/
