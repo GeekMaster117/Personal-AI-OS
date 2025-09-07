@@ -1,0 +1,26 @@
+{
+    "mkdir": {
+        "keywords": ["create", "make", "new", "folder", "directory", "mk", "mkdir"],
+        "args": [
+            {
+                "type": "noun",
+                "required": true,
+                "description": "The name of the folder to create"
+            }
+        ],
+        "description": "Create a folder",
+        "warning": false
+    },
+    "rmdir": {
+        "keywords": ["delete", "remove", "folder", "directory", "rm", "rmdir"],
+        "args": [
+            {
+                "type": "noun",
+                "required": true,
+                "description": "Name of the folder"
+            }
+        ],
+        "description": "Delete a folder",
+        "warning": true
+    }
+}
