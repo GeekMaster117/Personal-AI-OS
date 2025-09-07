@@ -214,5 +214,6 @@ data/
 models/
 cache/
 *.json
+*.bin
 
 .vscode/
