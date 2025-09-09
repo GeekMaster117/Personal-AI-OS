@@ -3,9 +3,9 @@
         "keywords": ["create", "make", "new", "folder", "directory", "mk", "mkdir"],
         "args": [
             {
-                "type": "noun",
+                "type": "any",
                 "required": true,
-                "description": "The name of the folder to create"
+                "description": "Name of the folder"
             }
         ],
         "description": "Create a folder",
@@ -15,7 +15,7 @@
         "keywords": ["delete", "remove", "folder", "directory", "rm", "rmdir"],
         "args": [
             {
-                "type": "noun",
+                "type": "any",
                 "required": true,
                 "description": "Name of the folder"
             }

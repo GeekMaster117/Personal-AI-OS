@@ -7,6 +7,7 @@ import hashlib
 from numpy import ndarray
 from collections import defaultdict, Counter
 
+import shlex
 from rapidfuzz import process, fuzz
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.linear_model import SGDClassifier
@@ -105,19 +106,55 @@ class Parser:
 
         return pipeline
     
-    def extract_keywords(self, tokens: list[str], probability_cutoff: float) -> list[str]:
+    def extract_keywords_nkeywords(self, tokens: set[str], probability_cutoff: float) -> tuple[set[str]]:
         if probability_cutoff < 0 or probability_cutoff > 1:
             raise ValueError(f"Probability cutoff must be in the interval [0, 1], value passed: {probability_cutoff}")
 
-        keywords = []
+        keywords = set()
+        non_keywords = set()
         for token in tokens:
             keyword = process.extractOne(token, self.keyword_action_map.keys(), scorer=fuzz.ratio, score_cutoff=probability_cutoff * 100)
             if keyword:
-                keywords.append(keyword[0])
+                keywords.add(keyword[0])
+            else:
+                non_keywords.add(token)
         
-        return keywords
+        return keywords, non_keywords
+    
+    def extract_args_types(self, tokens: set[str]) -> dict:
+        args_types_map = defaultdict(set)
+        for arg in tokens:
+            if arg.isdecimal():
+                args_types_map["int"].add(arg)
+            elif arg.isalpha():
+                args_types_map["str"].add(arg)
+            else:
+                args_types_map["any"].add(arg)
 
-    def extract_actions_normalised(self, keywords: list[str]) -> dict:
+        return args_types_map
+    
+    def extract_args_needed(self, action: str) -> Counter:
+        if "args" not in self.commands[action]:
+            return Counter()
+        
+        args_needed = Counter()
+        for arg in self.commands[action]["args"]:
+            args_needed[arg["type"]] += 1
+
+        return args_needed
+    
+    def extract_args_required(self, action: str) -> Counter:
+        if "args" not in self.commands[action]:
+            return Counter()
+        
+        args_needed = Counter()
+        for arg in self.commands[action]["args"]:
+            if self.commands[action]["args"]["required"]:
+                args_needed[arg["type"]] += 1
+
+        return args_needed
+
+    def extract_actions_normalised(self, keywords: set[str]) -> dict:
         keywords_counter = Counter(keywords)
 
         action_counter = Counter()
@@ -132,7 +169,7 @@ class Parser:
         
         return actions_normalised
 
-    def extract_action_frequency(self, actions_normalised: dict, probability_cutoff: float) -> str | None:
+    def extract_action_frequency(self, actions_normalised: dict, probability_cutoff: float = 0.85) -> str | None:
         if probability_cutoff < 0 or probability_cutoff > 1:
             raise ValueError(f"Probability cutoff must be in the interval [0, 1], value passed: {probability_cutoff}")
 
@@ -145,7 +182,7 @@ class Parser:
         
         return action_normalised[0]
 
-    def extract_actions_classification(self, keywords: list[str], top_actions_count: int) -> list[tuple]:
+    def extract_actions_classification(self, keywords: set[str], top_actions_count: int) -> list[tuple]:
         probabilities: ndarray = self._pipeline.predict_proba([" ".join(keywords)])[0]
 
         classes = [(str(self._pipeline.classes_[idx]), float(probability)) for idx, probability in enumerate(probabilities)]
@@ -153,23 +190,25 @@ class Parser:
 
         return top_actions
     
-    def train(self, keywords: list[str], action: str) -> None:
+    def train(self, keywords: set[str], action: str) -> None:
+        print(" ".join(keywords))
         X = self._vectorizer.transform([" ".join(keywords)])
-        self._classifier.partial_fit(X, [action], classes=list(self.commands.keys()))
+        self._classifier.partial_fit(X, [action], classes = list(self.commands.keys()))
 
         self._save_model(self._vectorizer, self._classifier)
 
-    def get_action(self, query: str, probability_cutoff: float = 0.85) -> str:
-        tokens: list[str] = query.lower().split()
-        keywords = self.extract_keywords(tokens, probability_cutoff)
+    def get_action(self, query: str, probability_cutoff: float = 0.85) -> tuple[str | list[str]]:
+        tokens: set[str] = set(shlex.split(query.lower()))
+        keywords, non_keywords = self.extract_keywords_nkeywords(tokens, probability_cutoff)
         if not keywords:
             raise SyntaxError("Unable to parse the query")
         
         actions_normalised: dict = self.extract_actions_normalised(keywords)
 
-        action = self.extract_action_frequency(actions_normalised, 0.85)
+        action = self.extract_action_frequency(actions_normalised)
         if not action:
             actions = self.extract_actions_classification(keywords, 5)
+            print(actions)
             if actions[0][1] >= 0.85:
                 action = actions[0][0]
             else:
@@ -181,9 +220,18 @@ class Parser:
                 self.train(keywords, actions[answer - 1][0])
                 action = actions[answer - 1][0]
 
-        return action
+        args_needed: Counter = self.extract_args_needed(action)
+        args_required: Counter = self.extract_args_required(action)
+        if not args_needed:
+            return action, []
+        
+        args_types: dict = self.extract_args_types(non_keywords)
+        args_available = sum(len(args_datatype) for args_datatype in args_types.values())
+        
+        if args_available < args_needed.total():
+            raise SyntaxError("Unable to parse the query")
     
-    def execute_action(self, action) -> None:
+    def execute_action(self, action : str, args: list[str]) -> None:
         if self.commands[action]["warning"] == True:
             answer = input(f"Do you want to, {self.commands[action]["description"]} (Y/N): ").lower()
             if answer != 'y':
@@ -198,11 +246,11 @@ query: str = input("Enter request: ")
 action: str | None = None
 while True:
     try:
-        action = parser.get_action(query)
+        action, args = parser.get_action(query)
     except:
         query = input("Unable to parse. Enter again: ")
         continue
     
     break
 
-parser.execute_action(action)
+parser.execute_action(action, args)
