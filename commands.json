@@ -22,5 +22,10 @@
         ],
         "description": "Delete a folder",
         "warning": true
+    },
+    "exit": {
+        "keywords": ["exit", "quit", "close", "shutdown", "stop", "bye"],
+        "description": "Exit application",
+        "warning": false
     }
 }
