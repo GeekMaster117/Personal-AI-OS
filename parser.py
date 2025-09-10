@@ -228,7 +228,7 @@ class Parser:
             if quoted:
                 classified_priority_non_keywords[type].add(token)
             else:
-                classified_non_keywords["str"].add(token)
+                classified_non_keywords[type].add(token)
 
         return classified_non_keywords, classified_priority_non_keywords
 
@@ -275,20 +275,60 @@ class Parser:
         except Exception as e:
             raise RuntimeError(f"Error fetching arguments for action '{action}': {e}")
         
-        if not required_needed or optional_needed:
+        if not required_needed and not optional_needed:
             return []
         
-        for type, required in required_needed.items():
-            if len(classified_non_keywords.get(type, 0)) + len(classified_priority_non_keywords.get(type, 0)) < required:
-                arguments_required = f"{type} arguments required: {required}"
-                arguments_found = f"{type} arguments found: {classified_non_keywords.get(type, 0)}"
+        def get_type_count(type: str) -> int:
+            return len(classified_non_keywords.get(type, [])) + len(classified_priority_non_keywords.get(type, []))
+        
+        def get_distinct_keys() -> set[str]:
+            return classified_non_keywords.keys() | classified_priority_non_keywords.keys()
+        
+        def get_distinct_non_any_keys() -> set[str]:
+            distinct_keys = classified_non_keywords.keys() | classified_priority_non_keywords.keys()
+            distinct_keys.discard("any")
 
-                error_message = (
-                    "Found less arguments then required",
-                    arguments_required,
-                    arguments_found
-                    )
-                raise SyntaxError('\n'.join(error_message))
+            return distinct_keys
+        
+        def raise_arguments_not_found_error() -> None:
+            arguments_required = ""
+            for type, required in required_needed.items():
+                arguments_required += f"{type}: {required}\n"
+
+            arguments_found = ""
+            for type in get_distinct_keys():
+                arguments_found += f"{type}: {get_type_count(type)}\n"
+            if not arguments_found:
+                arguments_found = "No arguments found"
+
+            error_message = (
+                "Found less arguments then required",
+                "Arguments required:",
+                arguments_required,
+                "Arguments found:",
+                arguments_found
+                )
+            raise SyntaxError('\n'.join(error_message))
+        
+        any_type_count = get_type_count("any")
+        non_any_type_count = sum([get_type_count(type) for type in get_distinct_non_any_keys()])
+        for type, required in required_needed.items():
+            type_count = get_type_count(type)
+
+            if type == "any":
+                if type_count < required:
+                    if non_any_type_count < required - type_count:
+                        raise_arguments_not_found_error()
+                    non_any_type_count -= required - type_count
+                else:
+                    any_type_count -= required
+            else:
+                if type_count < required:
+                    if any_type_count < required - type_count:
+                        raise_arguments_not_found_error()
+                    any_type_count -= required - type_count
+                else:
+                    non_any_type_count -= required
         
         return []
 
@@ -339,7 +379,7 @@ class Parser:
         try:
             arguments: list[str] = self._extract_arguments(action, classified_non_keywords, classified_priority_non_keywords)
         except Exception as e:
-            raise SyntaxError(f"Error mapping arguments: {e}")
+            raise SyntaxError(f"Error extracting arguments: {e}")
         
         return action, arguments
     
