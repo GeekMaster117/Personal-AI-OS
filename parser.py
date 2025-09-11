@@ -320,7 +320,7 @@ class Parser:
                 else:
                     non_any_type_count -= required
 
-    def pop_non_keyword(self, type: str, description: str, classified_priority_non_keywords: dict, classified_non_keywords: dict) -> str | None:
+    def _pop_non_keyword(self, type: str, description: str, classified_priority_non_keywords: dict, classified_non_keywords: dict) -> str | None:
         def pop(non_keywords: list[str], borrowed_dict: dict, borrowed_type: str, index: int = -1) -> str:
             non_keyword: str = non_keywords.pop(index)
             del borrowed_dict[borrowed_type]
@@ -373,7 +373,7 @@ class Parser:
                 borrowed_types = {"any": (0, len(non_keywords) - 1)}
 
         if not non_keywords:
-            raise ValueError("No non keywords found")
+            raise ValueError("Non keywords not found")
         
         if len(non_keywords) == 1:
             return pop(non_keywords, borrowed_dict, borrowed_types.popitem()[0])
@@ -386,9 +386,12 @@ class Parser:
             if range[0] <= answer <= range[1]:
                 return pop(non_keywords, borrowed_dict, t, answer)
             
-        raise RuntimeError("Unable to map answer to type")
+        raise RuntimeError("Unable to map non keyword to type")
     
     def _extract_arguments(self, action: str, classified_non_keywords: dict, classified_priority_non_keywords: dict) -> list[str]:
+        if 'args' not in self.commands[action]:
+            return []
+
         try:
             required_indices, required_needed = self._get_required_arguments(action)
             optional_indices = self._get_optional_arguments(action)
@@ -400,22 +403,86 @@ class Parser:
         
         self._check_argument_availability_else_throw(required_needed, classified_non_keywords, classified_priority_non_keywords)
 
-        arguments = []
+        required_arguments = []
         any_type_argumenet_indices = []
         for idx in required_indices:
             type = self.commands[action]["args"][idx]["type"]
             description = self.commands[action]["args"][idx]["description"]
 
             if type == "any":
-                any_type_argumenet_indices.append(len(arguments))
-                arguments.append(0)
+                any_type_argumenet_indices.append(len(required_arguments))
+                required_arguments.append(None)
             else:
-                arguments.append(self.pop_non_keyword(type, description, classified_priority_non_keywords, classified_non_keywords))
+                try:
+                    non_keyword = self.pop_non_keyword(type, description, classified_priority_non_keywords, classified_non_keywords)
+                except Exception as e:
+                    raise RuntimeError(f"Error mapping non keywords: {e}")
+                
+                if not non_keyword:
+                    raise RuntimeError("Could not map non keywords, even if they are available")
+                
+                required_arguments.append(non_keyword)
 
         for idx in any_type_argumenet_indices:
             description = self.commands[action]["args"][idx]["description"]
 
-            arguments[idx] = self.pop_non_keyword("any", description, classified_priority_non_keywords, classified_non_keywords)
+            try:
+                non_keyword = self.pop_non_keyword(type, description, classified_priority_non_keywords, classified_non_keywords)
+            except Exception as e:
+                raise RuntimeError(f"Error fetching non keywords: {e}")
+            
+            if not non_keyword:
+                raise RuntimeError("Could not fetch non keywords, even if they are available")
+
+            required_arguments[idx] = non_keyword
+
+        optional_arguments = []
+        any_type_argumenet_indices = []
+        for idx in optional_indices:
+            type = self.commands[action]["args"][idx]["type"]
+            description = self.commands[action]["args"][idx]["description"]
+
+            if type == "any":
+                any_type_argumenet_indices.append(len(optional_arguments))
+                required_arguments.append(None)
+            else:
+                try:
+                    non_keyword = self.pop_non_keyword(type, description, classified_priority_non_keywords, classified_non_keywords)
+                except Exception as e:
+                    raise RuntimeError(f"Error mapping non keywords: {e}")
+                
+                if not non_keyword:
+                    break
+                
+                required_arguments.append(non_keyword)
+
+        for idx in any_type_argumenet_indices:
+            description = self.commands[action]["args"][idx]["description"]
+
+            try:
+                non_keyword = self.pop_non_keyword(type, description, classified_priority_non_keywords, classified_non_keywords)
+            except Exception as e:
+                raise RuntimeError(f"Error fetching non keywords: {e}")
+            
+            if not non_keyword:
+                break
+
+            required_arguments[idx] = non_keyword
+
+        #merge sort required and optional arguments
+        arguments = []
+
+        ptr1, ptr2 = 0, 0
+        while ptr1 < len(required_indices) or ptr2 < len(optional_indices):
+            if ptr2 >= len(optional_indices) or required_indices[ptr1] < optional_indices[ptr2]:
+                arguments.append(required_arguments[ptr1])
+                ptr1 += 1
+            elif ptr2 < len(optional_arguments):
+                arguments.append(optional_arguments[ptr2])
+                ptr2 += 1
+            else:
+                arguments.append(None)
+                ptr2 += 1
 
         return arguments
 
@@ -477,7 +544,7 @@ class Parser:
                 print("Skipping request...")
                 return
             
-        print(action, arguments)
+        print("Translation:", action, ' '.join(arguments))
             
         #Todo: Execute Command
 
