@@ -145,37 +145,32 @@ class Parser:
         
         return -1
     
-    def _get_required_arguments(self, action: str) -> tuple[list[str], Counter]:
+    def _get_required_arguments(self, action: str) -> tuple[list[int], Counter]:
         if "args" not in self.commands[action]:
             return dict(), Counter()
         
         all_arguments: list[dict] = self.commands[action]["args"]
         
-        arguments, needed = [], Counter()
+        indices, needed = [], Counter()
         for i in range(len(all_arguments)):
             if all_arguments[i]["required"]:
-                type = all_arguments[i]["type"]
-
-                arguments.append(type)
-                needed[type] += 1
+                indices.append(i)
+                needed[all_arguments[i]["type"]] += 1
         
-        return arguments, needed
+        return indices, needed
     
-    def _get_optional_arguments(self, action: str) -> tuple[list[str], Counter]:
+    def _get_optional_arguments(self, action: str) -> tuple[list[int]]:
         if "args" not in self.commands[action]:
             return dict(), Counter()
         
         all_arguments: list[dict] = self.commands[action]["args"]
         
-        arguments, needed = [], Counter()
+        indices = []
         for i in range(len(all_arguments)):
             if not all_arguments[i]["required"]:
-                type = all_arguments[i]["type"]
-
-                arguments.append(type)
-                needed[type] += 1
+                indices.append(i)
         
-        return arguments, needed
+        return indices
     
     def _extract_tokens(self, query: str) -> list[tuple[str, bool]]:
         lexer = shlex.shlex(query)
@@ -214,7 +209,7 @@ class Parser:
         return keywords, non_keywords
     
     def _extract_classified_non_keywords(self, non_keywords: list[tuple[str, bool]]) -> tuple[dict, dict]:
-        classified_non_keywords, classified_priority_non_keywords = defaultdict(set), defaultdict(set)
+        classified_non_keywords, classified_priority_non_keywords = defaultdict(list), defaultdict(list)
         for token, quoted in non_keywords:
             if not quoted and token in ENGLISH_STOP_WORDS:
                 continue
@@ -226,9 +221,9 @@ class Parser:
                 type = "str"
             
             if quoted:
-                classified_priority_non_keywords[type].add(token)
+                classified_priority_non_keywords[type].append(token)
             else:
-                classified_non_keywords[type].add(token)
+                classified_non_keywords[type].append(token)
 
         return classified_non_keywords, classified_priority_non_keywords
 
@@ -268,16 +263,7 @@ class Parser:
 
         return top_actions
     
-    def _extract_arguments(self, action: str, classified_non_keywords: dict, classified_priority_non_keywords: dict) -> list[str]:
-        try:
-            required_arguments, required_needed = self._get_required_arguments(action)
-            optional_arguments, optional_needed = self._get_optional_arguments(action)
-        except Exception as e:
-            raise RuntimeError(f"Error fetching arguments for action '{action}': {e}")
-        
-        if not required_needed and not optional_needed:
-            return []
-        
+    def _check_argument_availability_else_throw(self, required_needed: Counter, classified_non_keywords: dict, classified_priority_non_keywords: dict) -> bool:
         def get_type_count(type: str) -> int:
             return len(classified_non_keywords.get(type, [])) + len(classified_priority_non_keywords.get(type, []))
         
@@ -319,6 +305,8 @@ class Parser:
                 if type_count < required:
                     if non_any_type_count < required - type_count:
                         raise_arguments_not_found_error()
+                    
+                    any_type_count = 0
                     non_any_type_count -= required - type_count
                 else:
                     any_type_count -= required
@@ -326,11 +314,110 @@ class Parser:
                 if type_count < required:
                     if any_type_count < required - type_count:
                         raise_arguments_not_found_error()
+
+                    non_any_type_count = 0
                     any_type_count -= required - type_count
                 else:
                     non_any_type_count -= required
+
+    def pop_non_keyword(self, type: str, description: str, classified_priority_non_keywords: dict, classified_non_keywords: dict) -> str | None:
+        def pop(non_keywords: list[str], borrowed_dict: dict, borrowed_type: str, index: int = -1) -> str:
+            non_keyword: str = non_keywords.pop(index)
+            del borrowed_dict[borrowed_type]
+
+            return non_keyword
+
+        non_keywords: list[list[str]] | None = None
+        borrowed_dict: dict | None = None
+        borrowed_types: dict | None = None
+
+        if type == "any":
+            if "any" in classified_priority_non_keywords:
+                non_keywords = classified_priority_non_keywords["any"]
+                borrowed_dict = classified_priority_non_keywords
+                borrowed_types = {"any": (0, len(non_keywords) - 1)}
+            elif classified_priority_non_keywords:
+                non_keywords, borrowed_types = [], dict()
+                for t, nk in classified_priority_non_keywords.items():
+                    if t != "any":
+                        borrowed_types[t] = (len(non_keywords), len(non_keywords) + len(nk) - 1)
+                        non_keywords.extend(nk)
+                borrowed_dict = classified_priority_non_keywords
+            elif "any" in classified_non_keywords:
+                non_keywords = classified_non_keywords["any"]
+                borrowed_dict = classified_non_keywords
+                borrowed_types = {"any": (0, len(non_keywords) - 1)}
+            elif classified_non_keywords:
+                non_keywords, borrowed_types = [], dict()
+                for t, nk in classified_non_keywords.items():
+                    if t != "any":
+                        borrowed_types[t] = (len(non_keywords), len(non_keywords) + len(nk) - 1)
+                        non_keywords.extend(nk)
+                borrowed_dict = classified_non_keywords
+        else:
+            if type in classified_priority_non_keywords:
+                non_keywords = classified_priority_non_keywords[type]
+                borrowed_dict = classified_priority_non_keywords
+                borrowed_types = {"type": (0, len(non_keywords) - 1)}
+            elif "any" in classified_priority_non_keywords:
+                non_keywords = classified_priority_non_keywords["any"]
+                borrowed_dict = classified_priority_non_keywords
+                borrowed_types = {"any": (0, len(non_keywords) - 1)}
+            elif type in classified_non_keywords:
+                non_keywords = [classified_non_keywords[type]]
+                borrowed_dict = classified_non_keywords
+                borrowed_types = {"type": (0, len(non_keywords) - 1)}
+            elif "any" in classified_non_keywords["any"]:
+                non_keywords = classified_non_keywords["any"]
+                borrowed_dict = classified_non_keywords
+                borrowed_types = {"any": (0, len(non_keywords) - 1)}
+
+        if not non_keywords:
+            raise ValueError("No non keywords found")
         
-        return []
+        if len(non_keywords) == 1:
+            return pop(non_keywords, borrowed_dict, borrowed_types.popitem()[0])
+        
+        answer = self._handle_options(non_keywords, options_message = f"What is, {description}")
+        if answer == -1:
+            return None
+        
+        for t, range in borrowed_types.items():
+            if range[0] <= answer <= range[1]:
+                return pop(non_keywords, borrowed_dict, t, answer)
+            
+        raise RuntimeError("Unable to map answer to type")
+    
+    def _extract_arguments(self, action: str, classified_non_keywords: dict, classified_priority_non_keywords: dict) -> list[str]:
+        try:
+            required_indices, required_needed = self._get_required_arguments(action)
+            optional_indices = self._get_optional_arguments(action)
+        except Exception as e:
+            raise RuntimeError(f"Error fetching arguments for action '{action}': {e}")
+        
+        if not required_indices and not optional_indices:
+            return []
+        
+        self._check_argument_availability_else_throw(required_needed, classified_non_keywords, classified_priority_non_keywords)
+
+        arguments = []
+        any_type_argumenet_indices = []
+        for idx in required_indices:
+            type = self.commands[action]["args"][idx]["type"]
+            description = self.commands[action]["args"][idx]["description"]
+
+            if type == "any":
+                any_type_argumenet_indices.append(len(arguments))
+                arguments.append(0)
+            else:
+                arguments.append(self.pop_non_keyword(type, description, classified_priority_non_keywords, classified_non_keywords))
+
+        for idx in any_type_argumenet_indices:
+            description = self.commands[action]["args"][idx]["description"]
+
+            arguments[idx] = self.pop_non_keyword("any", description, classified_priority_non_keywords, classified_non_keywords)
+
+        return arguments
 
     def extract_action_arguments(self, query: str, probability_cutoff: float = 0.85) -> tuple[str | list[str]]:
         try:
@@ -383,12 +470,14 @@ class Parser:
         
         return action, arguments
     
-    def execute_action(self, action : str, args: list[str]) -> None:
+    def execute_action(self, action : str, arguments: list[str]) -> None:
         if self.commands[action]["warning"] == True:
             answer = input(f"Do you want to, {self.commands[action]["description"]} (Y/N): ").lower()
             if answer != 'y':
                 print("Skipping request...")
                 return
+            
+        print(action, arguments)
             
         #Todo: Execute Command
 
@@ -405,7 +494,7 @@ print("-----------------------------")
 action: str | None = None
 while True:
     try:
-        action, args = parser.extract_action_arguments(query)
+        action, arguments = parser.extract_action_arguments(query)
 
         if action:
             break
@@ -424,4 +513,4 @@ if action == "exit":
     print("-----------------------------")
     exit(0)
 
-parser.execute_action(action, args)
+parser.execute_action(action, arguments)
