@@ -1,6 +1,7 @@
 import os
 
 import json
+import pickle
 import joblib
 import hashlib
 
@@ -16,6 +17,7 @@ from sklearn.pipeline import Pipeline, make_pipeline
 class Parser:
     commands_path: str = "commands.json"
     commands_hash_path: str = "commands_hash.txt"
+    keyword_action_map_path: str = "map.bin"
     vectorizer_path: str = "vectorizer.bin"
     classifier_path: str = "classifier.bin"
 
@@ -27,24 +29,24 @@ class Parser:
             raise RuntimeError(f"Error fetching from commands: {e}")
 
         try:
-            self.keyword_action_map: dict = defaultdict(set)
-            for action, structure in self.commands.items():
-                for keyword in structure["keywords"]:
-                    self.keyword_action_map[keyword].add(action)
+            self.keyword_action_map: dict = self._get_keyword_action_map()
         except Exception as e:
-            raise RuntimeError(f"Error mapping commands keywords to actions: {e}")
+            raise RuntimeError(f"Error fetching keyword action map: {e}")
 
         try:
-            self._action_pipeline, self._action_vectorizer, self._action_classifier = self._load_model()
+            self._action_pipeline, self._action_vectorizer, self._action_classifier = self._get_model()
         except Exception as e:
-            raise RuntimeError(f"Error loading model: {e}")
+            raise RuntimeError(f"Error fetching model: {e}")
+    
+    def _save_keyword_action_map(self, keyword_action_map: dict) -> None:
+        with open(Parser.keyword_action_map_path, "wb") as file:
+            pickle.dump(keyword_action_map, file)
 
-    def _get_commands_hash(self) -> str:
-        with open(Parser.commands_path, 'r') as file:
-            data = json.load(file)
-        data_str = json.dumps(data, sort_keys=True)
-        
-        return hashlib.md5(data_str.encode('utf-8')).hexdigest()
+    def _load_keyword_action_map(self) -> dict | None:
+        if not os.path.exists(Parser.keyword_action_map_path):
+            return None
+        with open(Parser.keyword_action_map_path, "rb") as file:
+            return pickle.load(file)
 
     def _save_commands_hash(self) -> None:
         with open(Parser.commands_hash_path, "w") as file:
@@ -67,52 +69,21 @@ class Parser:
             return False
         return True
     
-    def _save_vectorizer(self, vectorizer: CountVectorizer, vectorizer_path: str) -> None:
-        joblib.dump(vectorizer, vectorizer_path)
+    def _save_vectorizer(self, vectorizer: CountVectorizer) -> None:
+        joblib.dump(vectorizer, Parser.vectorizer_path)
 
-    def _save_classifier(self, classifier: SGDClassifier, classifier_path: str) -> None:
-        joblib.dump(classifier, classifier_path)
+    def _save_classifier(self, classifier: SGDClassifier) -> None:
+        joblib.dump(classifier, Parser.classifier_path)
 
-    def _load_vectorizer(self, vectorizer_path: str) -> CountVectorizer | None:
-        if not os.path.exists(vectorizer_path):
+    def _load_vectorizer(self) -> CountVectorizer | None:
+        if not os.path.exists(Parser.vectorizer_path):
             return None
-        return joblib.load(vectorizer_path)
+        return joblib.load(Parser.vectorizer_path)
     
-    def _load_classifier(self, classifier_path) -> SGDClassifier | None:
-        if not os.path.exists(classifier_path):
+    def _load_classifier(self) -> SGDClassifier | None:
+        if not os.path.exists(Parser.classifier_path):
             return None
-        return joblib.load(classifier_path)
-    
-    def _load_model(self) -> tuple[Pipeline, CountVectorizer, SGDClassifier]:
-        try:
-            vectorizer = self._load_vectorizer(Parser.vectorizer_path)
-            classifier = self._load_classifier(Parser.classifier_path)
-        except:
-            vectorizer, classifier = None, None
-
-        if not vectorizer or not classifier or not self._check_commands_hash():
-            try:
-                vectorizer = CountVectorizer()
-                classifier = SGDClassifier(loss="log_loss")
-                pipeline = self._init_train(vectorizer, classifier)
-            except Exception as e:
-                raise RuntimeError(f"Error initialising pipeline: {e}")
-            
-            try:
-                self._save_vectorizer(vectorizer, Parser.vectorizer_path)
-                self._save_classifier(classifier, Parser.classifier_path)
-                self._save_commands_hash()
-            except Exception as e:
-                raise RuntimeError(f"Error saving: {e}")
-
-            return pipeline, vectorizer, classifier
-        
-        try:
-            pipeline = make_pipeline(vectorizer, classifier)
-        except Exception as e:
-            raise RuntimeError(f"Error making pipeline: {e}")
-        
-        return pipeline, vectorizer, classifier
+        return joblib.load(Parser.classifier_path)
 
     def _init_train(self, vectorizer: CountVectorizer, classifier: SGDClassifier) -> Pipeline:
         pipeline = make_pipeline(vectorizer, classifier)
@@ -130,8 +101,8 @@ class Parser:
         X = self._action_vectorizer.transform([" ".join(keywords)])
         self._action_classifier.partial_fit(X, [action], classes = list(self.commands.keys()))
 
-        self._save_vectorizer(self._action_vectorizer, Parser.vectorizer_path)
-        self._save_classifier(self._action_classifier, Parser.classifier_path)
+        self._save_vectorizer(self._action_vectorizer)
+        self._save_classifier(self._action_classifier)
 
     def _handle_options(self, options: list[str], options_message = "Select an option:", select_message = "Enter an answer", key = lambda x: x) -> int:
         print(options_message)
@@ -144,6 +115,188 @@ class Parser:
             return int(choice) - 1
         
         return -1
+    
+    def _check_argument_availability_else_throw(self, required_needed: Counter, classified_non_keywords: dict, classified_priority_non_keywords: dict) -> bool:
+        def get_type_count(type: str) -> int:
+            return len(classified_non_keywords.get(type, [])) + len(classified_priority_non_keywords.get(type, []))
+        
+        def get_distinct_keys() -> set[str]:
+            return classified_non_keywords.keys() | classified_priority_non_keywords.keys()
+        
+        def get_distinct_non_any_keys() -> set[str]:
+            distinct_keys = classified_non_keywords.keys() | classified_priority_non_keywords.keys()
+            distinct_keys.discard("any")
+
+            return distinct_keys
+        
+        def raise_arguments_not_found_error() -> None:
+            arguments_required = ""
+            for type, required in required_needed.items():
+                arguments_required += f"{type}: {required}\n"
+
+            arguments_found = ""
+            for type in get_distinct_keys():
+                arguments_found += f"{type}: {get_type_count(type)}\n"
+            if not arguments_found:
+                arguments_found = "No arguments found"
+
+            error_message = (
+                "Found less arguments then required",
+                "Arguments required:",
+                arguments_required,
+                "Arguments found:",
+                arguments_found
+                )
+            raise SyntaxError('\n'.join(error_message))
+        
+        any_type_count = get_type_count("any")
+        non_any_type_count = sum([get_type_count(type) for type in get_distinct_non_any_keys()])
+        for type, required in required_needed.items():
+            type_count = get_type_count(type)
+
+            if type == "any":
+                if type_count < required:
+                    if non_any_type_count < required - type_count:
+                        raise_arguments_not_found_error()
+                    
+                    any_type_count = 0
+                    non_any_type_count -= required - type_count
+                else:
+                    any_type_count -= required
+            else:
+                if type_count < required:
+                    if any_type_count < required - type_count:
+                        raise_arguments_not_found_error()
+
+                    non_any_type_count = 0
+                    any_type_count -= required - type_count
+                else:
+                    non_any_type_count -= required
+
+    def _pop_non_keyword(self, type: str, description: str, classified_non_keywords: dict, classified_priority_non_keywords: dict) -> str | None:
+        def pop(non_keywords: list[str], borrowed_dict: dict, borrowed_type: str, index: int = -1) -> str:
+            non_keyword: str = non_keywords.pop(index)
+            del borrowed_dict[borrowed_type]
+
+            return non_keyword
+
+        non_keywords: list[list[str]] | None = None
+        borrowed_dict: dict | None = None
+        borrowed_types: dict | None = None
+
+        if type == "any":
+            if "any" in classified_priority_non_keywords:
+                non_keywords = classified_priority_non_keywords["any"]
+                borrowed_dict = classified_priority_non_keywords
+                borrowed_types = {"any": (0, len(non_keywords) - 1)}
+            elif classified_priority_non_keywords:
+                non_keywords, borrowed_types = [], dict()
+                for t, nk in classified_priority_non_keywords.items():
+                    if t != "any":
+                        borrowed_types[t] = (len(non_keywords), len(non_keywords) + len(nk) - 1)
+                        non_keywords.extend(nk)
+                borrowed_dict = classified_priority_non_keywords
+            elif "any" in classified_non_keywords:
+                non_keywords = classified_non_keywords["any"]
+                borrowed_dict = classified_non_keywords
+                borrowed_types = {"any": (0, len(non_keywords) - 1)}
+            elif classified_non_keywords:
+                non_keywords, borrowed_types = [], dict()
+                for t, nk in classified_non_keywords.items():
+                    if t != "any":
+                        borrowed_types[t] = (len(non_keywords), len(non_keywords) + len(nk) - 1)
+                        non_keywords.extend(nk)
+                borrowed_dict = classified_non_keywords
+        else:
+            if type in classified_priority_non_keywords:
+                non_keywords = classified_priority_non_keywords[type]
+                borrowed_dict = classified_priority_non_keywords
+                borrowed_types = {"type": (0, len(non_keywords) - 1)}
+            elif "any" in classified_priority_non_keywords:
+                non_keywords = classified_priority_non_keywords["any"]
+                borrowed_dict = classified_priority_non_keywords
+                borrowed_types = {"any": (0, len(non_keywords) - 1)}
+            elif type in classified_non_keywords:
+                non_keywords = [classified_non_keywords[type]]
+                borrowed_dict = classified_non_keywords
+                borrowed_types = {"type": (0, len(non_keywords) - 1)}
+            elif "any" in classified_non_keywords["any"]:
+                non_keywords = classified_non_keywords["any"]
+                borrowed_dict = classified_non_keywords
+                borrowed_types = {"any": (0, len(non_keywords) - 1)}
+
+        if not non_keywords:
+            raise ValueError("Non keywords not found")
+        
+        if len(non_keywords) == 1:
+            return pop(non_keywords, borrowed_dict, borrowed_types.popitem()[0])
+        
+        answer = self._handle_options(non_keywords, options_message = f"What is, {description}")
+        if answer == -1:
+            return None
+        
+        for t, range in borrowed_types.items():
+            if range[0] <= answer <= range[1]:
+                return pop(non_keywords, borrowed_dict, t, answer)
+            
+        raise RuntimeError("Unable to map non keyword to type")
+    
+    def _get_commands_hash(self) -> str:
+        with open(Parser.commands_path, 'r') as file:
+            data = json.load(file)
+        data_str = json.dumps(data, sort_keys=True)
+        
+        return hashlib.md5(data_str.encode('utf-8')).hexdigest()
+    
+    def _get_model(self) -> tuple[Pipeline, CountVectorizer, SGDClassifier]:
+        try:
+            vectorizer: CountVectorizer | None = self._load_vectorizer()
+            classifier: SGDClassifier | None = self._load_classifier()
+        except:
+            vectorizer, classifier = None, None
+
+        if not vectorizer or not classifier or not self._check_commands_hash():
+            try:
+                vectorizer = CountVectorizer()
+                classifier = SGDClassifier(loss="log_loss")
+                pipeline = self._init_train(vectorizer, classifier)
+            except Exception as e:
+                raise RuntimeError(f"Error initialising pipeline: {e}")
+            
+            try:
+                self._save_vectorizer(vectorizer)
+                self._save_classifier(classifier)
+                self._save_commands_hash()
+            except Exception as e:
+                raise RuntimeError(f"Error saving: {e}")
+
+            return pipeline, vectorizer, classifier
+        
+        try:
+            pipeline = make_pipeline(vectorizer, classifier)
+        except Exception as e:
+            raise RuntimeError(f"Error making pipeline: {e}")
+        
+        return pipeline, vectorizer, classifier
+    
+    def _get_keyword_action_map(self) -> dict:
+        try:
+            keyword_action_map: dict | None = self._load_keyword_action_map()
+        except:
+            keyword_action_map = None
+
+        if not keyword_action_map or not self._check_commands_hash():
+            try:
+                keyword_action_map: dict = defaultdict(set)
+                for action, structure in self.commands.items():
+                    for keyword in structure["keywords"]:
+                        keyword_action_map[keyword].add(action)
+            except Exception as e:
+                raise RuntimeError(f"Error mapping commands keywords to actions: {e}")
+
+            self._save_keyword_action_map(keyword_action_map)
+
+        return keyword_action_map
     
     def _get_required_arguments(self, action: str) -> tuple[list[int], Counter]:
         if "args" not in self.commands[action]:
@@ -263,130 +416,77 @@ class Parser:
 
         return top_actions
     
-    def _check_argument_availability_else_throw(self, required_needed: Counter, classified_non_keywords: dict, classified_priority_non_keywords: dict) -> bool:
-        def get_type_count(type: str) -> int:
-            return len(classified_non_keywords.get(type, [])) + len(classified_priority_non_keywords.get(type, []))
-        
-        def get_distinct_keys() -> set[str]:
-            return classified_non_keywords.keys() | classified_priority_non_keywords.keys()
-        
-        def get_distinct_non_any_keys() -> set[str]:
-            distinct_keys = classified_non_keywords.keys() | classified_priority_non_keywords.keys()
-            distinct_keys.discard("any")
-
-            return distinct_keys
-        
-        def raise_arguments_not_found_error() -> None:
-            arguments_required = ""
-            for type, required in required_needed.items():
-                arguments_required += f"{type}: {required}\n"
-
-            arguments_found = ""
-            for type in get_distinct_keys():
-                arguments_found += f"{type}: {get_type_count(type)}\n"
-            if not arguments_found:
-                arguments_found = "No arguments found"
-
-            error_message = (
-                "Found less arguments then required",
-                "Arguments required:",
-                arguments_required,
-                "Arguments found:",
-                arguments_found
-                )
-            raise SyntaxError('\n'.join(error_message))
-        
-        any_type_count = get_type_count("any")
-        non_any_type_count = sum([get_type_count(type) for type in get_distinct_non_any_keys()])
-        for type, required in required_needed.items():
-            type_count = get_type_count(type)
+    def _extract_required_arguments(self, action: str, required_indices: list[int], classified_non_keywords: dict, classified_priority_non_keywords: dict) -> list[str]:
+        required_arguments = []
+        any_type_argument_indices = []
+        for idx in required_indices:
+            type = self.commands[action]["args"][idx]["type"]
+            description = self.commands[action]["args"][idx]["description"]
 
             if type == "any":
-                if type_count < required:
-                    if non_any_type_count < required - type_count:
-                        raise_arguments_not_found_error()
-                    
-                    any_type_count = 0
-                    non_any_type_count -= required - type_count
-                else:
-                    any_type_count -= required
+                any_type_argument_indices.append(len(required_arguments))
+                required_arguments.append(None)
             else:
-                if type_count < required:
-                    if any_type_count < required - type_count:
-                        raise_arguments_not_found_error()
+                try:
+                    non_keyword = self._pop_non_keyword(type, description, classified_non_keywords, classified_priority_non_keywords)
+                except Exception as e:
+                    raise RuntimeError(f"Error mapping non keywords: {e}")
+                
+                if not non_keyword:
+                    raise RuntimeError("Could not map non keywords, even if they are available")
+                
+                required_arguments.append(non_keyword)
 
-                    non_any_type_count = 0
-                    any_type_count -= required - type_count
-                else:
-                    non_any_type_count -= required
+        for idx in any_type_argument_indices:
+            description = self.commands[action]["args"][idx]["description"]
 
-    def _pop_non_keyword(self, type: str, description: str, classified_priority_non_keywords: dict, classified_non_keywords: dict) -> str | None:
-        def pop(non_keywords: list[str], borrowed_dict: dict, borrowed_type: str, index: int = -1) -> str:
-            non_keyword: str = non_keywords.pop(index)
-            del borrowed_dict[borrowed_type]
-
-            return non_keyword
-
-        non_keywords: list[list[str]] | None = None
-        borrowed_dict: dict | None = None
-        borrowed_types: dict | None = None
-
-        if type == "any":
-            if "any" in classified_priority_non_keywords:
-                non_keywords = classified_priority_non_keywords["any"]
-                borrowed_dict = classified_priority_non_keywords
-                borrowed_types = {"any": (0, len(non_keywords) - 1)}
-            elif classified_priority_non_keywords:
-                non_keywords, borrowed_types = [], dict()
-                for t, nk in classified_priority_non_keywords.items():
-                    if t != "any":
-                        borrowed_types[t] = (len(non_keywords), len(non_keywords) + len(nk) - 1)
-                        non_keywords.extend(nk)
-                borrowed_dict = classified_priority_non_keywords
-            elif "any" in classified_non_keywords:
-                non_keywords = classified_non_keywords["any"]
-                borrowed_dict = classified_non_keywords
-                borrowed_types = {"any": (0, len(non_keywords) - 1)}
-            elif classified_non_keywords:
-                non_keywords, borrowed_types = [], dict()
-                for t, nk in classified_non_keywords.items():
-                    if t != "any":
-                        borrowed_types[t] = (len(non_keywords), len(non_keywords) + len(nk) - 1)
-                        non_keywords.extend(nk)
-                borrowed_dict = classified_non_keywords
-        else:
-            if type in classified_priority_non_keywords:
-                non_keywords = classified_priority_non_keywords[type]
-                borrowed_dict = classified_priority_non_keywords
-                borrowed_types = {"type": (0, len(non_keywords) - 1)}
-            elif "any" in classified_priority_non_keywords:
-                non_keywords = classified_priority_non_keywords["any"]
-                borrowed_dict = classified_priority_non_keywords
-                borrowed_types = {"any": (0, len(non_keywords) - 1)}
-            elif type in classified_non_keywords:
-                non_keywords = [classified_non_keywords[type]]
-                borrowed_dict = classified_non_keywords
-                borrowed_types = {"type": (0, len(non_keywords) - 1)}
-            elif "any" in classified_non_keywords["any"]:
-                non_keywords = classified_non_keywords["any"]
-                borrowed_dict = classified_non_keywords
-                borrowed_types = {"any": (0, len(non_keywords) - 1)}
-
-        if not non_keywords:
-            raise ValueError("Non keywords not found")
-        
-        if len(non_keywords) == 1:
-            return pop(non_keywords, borrowed_dict, borrowed_types.popitem()[0])
-        
-        answer = self._handle_options(non_keywords, options_message = f"What is, {description}")
-        if answer == -1:
-            return None
-        
-        for t, range in borrowed_types.items():
-            if range[0] <= answer <= range[1]:
-                return pop(non_keywords, borrowed_dict, t, answer)
+            try:
+                non_keyword = self._pop_non_keyword(type, description, classified_non_keywords, classified_priority_non_keywords)
+            except Exception as e:
+                raise RuntimeError(f"Error fetching non keywords: {e}")
             
-        raise RuntimeError("Unable to map non keyword to type")
+            if not non_keyword:
+                raise RuntimeError("Could not fetch non keywords, even if they are available")
+
+            required_arguments[idx] = non_keyword
+
+        return required_arguments
+
+    def _extract_optional_arguments(self, action: str, optional_indices: list[int], classified_non_keywords: dict, classified_priority_non_keywords: dict) -> list[str]:
+        optional_arguments = []
+        any_type_argumenet_indices = []
+        for idx in optional_indices:
+            type = self.commands[action]["args"][idx]["type"]
+            description = self.commands[action]["args"][idx]["description"]
+
+            if type == "any":
+                any_type_argumenet_indices.append(len(optional_arguments))
+                optional_arguments.append(None)
+            else:
+                try:
+                    non_keyword = self._pop_non_keyword(type, description, classified_non_keywords, classified_priority_non_keywords)
+                except Exception as e:
+                    raise RuntimeError(f"Error mapping non keywords: {e}")
+                
+                if not non_keyword:
+                    break
+                
+                optional_arguments.append(non_keyword)
+
+        for idx in any_type_argumenet_indices:
+            description = self.commands[action]["args"][idx]["description"]
+
+            try:
+                non_keyword = self._pop_non_keyword(type, description, classified_non_keywords, classified_priority_non_keywords)
+            except Exception as e:
+                raise RuntimeError(f"Error fetching non keywords: {e}")
+            
+            if not non_keyword:
+                break
+
+            optional_arguments[idx] = non_keyword
+
+        return optional_arguments
     
     def _extract_arguments(self, action: str, classified_non_keywords: dict, classified_priority_non_keywords: dict) -> list[str]:
         if 'args' not in self.commands[action]:
@@ -403,71 +503,8 @@ class Parser:
         
         self._check_argument_availability_else_throw(required_needed, classified_non_keywords, classified_priority_non_keywords)
 
-        required_arguments = []
-        any_type_argumenet_indices = []
-        for idx in required_indices:
-            type = self.commands[action]["args"][idx]["type"]
-            description = self.commands[action]["args"][idx]["description"]
-
-            if type == "any":
-                any_type_argumenet_indices.append(len(required_arguments))
-                required_arguments.append(None)
-            else:
-                try:
-                    non_keyword = self.pop_non_keyword(type, description, classified_priority_non_keywords, classified_non_keywords)
-                except Exception as e:
-                    raise RuntimeError(f"Error mapping non keywords: {e}")
-                
-                if not non_keyword:
-                    raise RuntimeError("Could not map non keywords, even if they are available")
-                
-                required_arguments.append(non_keyword)
-
-        for idx in any_type_argumenet_indices:
-            description = self.commands[action]["args"][idx]["description"]
-
-            try:
-                non_keyword = self.pop_non_keyword(type, description, classified_priority_non_keywords, classified_non_keywords)
-            except Exception as e:
-                raise RuntimeError(f"Error fetching non keywords: {e}")
-            
-            if not non_keyword:
-                raise RuntimeError("Could not fetch non keywords, even if they are available")
-
-            required_arguments[idx] = non_keyword
-
-        optional_arguments = []
-        any_type_argumenet_indices = []
-        for idx in optional_indices:
-            type = self.commands[action]["args"][idx]["type"]
-            description = self.commands[action]["args"][idx]["description"]
-
-            if type == "any":
-                any_type_argumenet_indices.append(len(optional_arguments))
-                required_arguments.append(None)
-            else:
-                try:
-                    non_keyword = self.pop_non_keyword(type, description, classified_priority_non_keywords, classified_non_keywords)
-                except Exception as e:
-                    raise RuntimeError(f"Error mapping non keywords: {e}")
-                
-                if not non_keyword:
-                    break
-                
-                required_arguments.append(non_keyword)
-
-        for idx in any_type_argumenet_indices:
-            description = self.commands[action]["args"][idx]["description"]
-
-            try:
-                non_keyword = self.pop_non_keyword(type, description, classified_priority_non_keywords, classified_non_keywords)
-            except Exception as e:
-                raise RuntimeError(f"Error fetching non keywords: {e}")
-            
-            if not non_keyword:
-                break
-
-            required_arguments[idx] = non_keyword
+        required_arguments: list[str] = self._extract_required_arguments(action, required_indices, classified_non_keywords, classified_priority_non_keywords)
+        optional_arguments: list[str] = self._extract_optional_arguments(action, optional_indices, classified_non_keywords, classified_priority_non_keywords)
 
         #merge sort required and optional arguments
         arguments = []
