@@ -165,11 +165,7 @@ class Parser:
                     any_type_count -= required
             else:
                 if type_count < required:
-                    if any_type_count < required - type_count:
-                        raise_arguments_not_found_error()
-
-                    non_any_type_count = 0
-                    any_type_count -= required - type_count
+                    raise_arguments_not_found_error()
                 else:
                     non_any_type_count -= required
 
@@ -185,45 +181,27 @@ class Parser:
         borrowed_types: dict | None = None
 
         if type == "any":
-            if "any" in classified_priority_non_keywords:
-                non_keywords = classified_priority_non_keywords["any"]
-                borrowed_dict = classified_priority_non_keywords
-                borrowed_types = {"any": (0, len(non_keywords) - 1)}
-            elif classified_priority_non_keywords:
+            if classified_priority_non_keywords:
                 non_keywords, borrowed_types = [], dict()
                 for t, nk in classified_priority_non_keywords.items():
-                    if t != "any":
-                        borrowed_types[t] = (len(non_keywords), len(non_keywords) + len(nk) - 1)
-                        non_keywords.extend(nk)
+                    borrowed_types[t] = (len(non_keywords), len(non_keywords) + len(nk) - 1)
+                    non_keywords.extend(nk)
                 borrowed_dict = classified_priority_non_keywords
-            elif "any" in classified_non_keywords:
-                non_keywords = classified_non_keywords["any"]
-                borrowed_dict = classified_non_keywords
-                borrowed_types = {"any": (0, len(non_keywords) - 1)}
             elif classified_non_keywords:
                 non_keywords, borrowed_types = [], dict()
                 for t, nk in classified_non_keywords.items():
-                    if t != "any":
-                        borrowed_types[t] = (len(non_keywords), len(non_keywords) + len(nk) - 1)
-                        non_keywords.extend(nk)
+                    borrowed_types[t] = (len(non_keywords), len(non_keywords) + len(nk) - 1)
+                    non_keywords.extend(nk)
                 borrowed_dict = classified_non_keywords
         else:
             if type in classified_priority_non_keywords:
                 non_keywords = classified_priority_non_keywords[type]
                 borrowed_dict = classified_priority_non_keywords
                 borrowed_types = {"type": (0, len(non_keywords) - 1)}
-            elif "any" in classified_priority_non_keywords:
-                non_keywords = classified_priority_non_keywords["any"]
-                borrowed_dict = classified_priority_non_keywords
-                borrowed_types = {"any": (0, len(non_keywords) - 1)}
             elif type in classified_non_keywords:
                 non_keywords = [classified_non_keywords[type]]
                 borrowed_dict = classified_non_keywords
                 borrowed_types = {"type": (0, len(non_keywords) - 1)}
-            elif "any" in classified_non_keywords["any"]:
-                non_keywords = classified_non_keywords["any"]
-                borrowed_dict = classified_non_keywords
-                borrowed_types = {"any": (0, len(non_keywords) - 1)}
 
         if not non_keywords:
             raise ValueError("Non keywords not found")
