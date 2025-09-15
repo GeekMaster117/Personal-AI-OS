@@ -1,5 +1,3 @@
-import subprocess
-
 import json
 import hashlib
 
@@ -11,24 +9,12 @@ from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS
 
 from Include.wrapper.parser_wrapper import ParserWrapper
 
-class Parser:
+class ParserService:
     def __init__(self):
         try:
             self._wrapper = ParserWrapper()
         except Exception as e:
             raise RuntimeError(f"Error initialising parser wrapper: {e}")
-
-    def _handle_options(self, options: list[str], options_message = "Select an option:", select_message = "Enter an answer", key = lambda x: x) -> int:
-        print(options_message)
-        for i, option in enumerate(options, start=1):
-            print(f"{i}. {key(option)}")
-        print(f"{len(options) + 1}. Skip request")
-
-        choice = input(f"{select_message} (1-{len(options) + 1}): ")
-        if choice.isdigit() and 1 <= int(choice) <= len(options):
-            return int(choice) - 1
-        
-        return -1
     
     def _check_argument_availability_else_throw(self, required_needed: Counter, classified_non_keywords: dict, classified_priority_non_keywords: dict) -> bool:
         def get_type_count(type: str) -> int:
@@ -123,7 +109,7 @@ class Parser:
         if len(non_keywords) == 1:
             return pop(non_keywords, borrowed_dict, borrowed_types.popitem()[0])
         
-        answer = self._handle_options(non_keywords, options_message = f"What is, {description}")
+        answer = self.handle_options(non_keywords, options_message = f"What is, {description}")
         if answer == -1:
             return None
         
@@ -132,121 +118,18 @@ class Parser:
                 return pop(non_keywords, borrowed_dict, t, answer)
             
         raise RuntimeError("Unable to map non keyword to type")
-
-    def _get_commands_hash(self, commands: dict) -> str:
-        data_str = json.dumps(commands, sort_keys=True)
-
-        return hashlib.md5(data_str.encode('utf-8')).hexdigest()
     
-    def _get_required_arguments(self, action: str) -> tuple[list[int], Counter]:
-        if "args" not in self._commands[action]:
-            return dict(), Counter()
-        
-        all_arguments: list[dict] = self._commands[action]["args"]
-        
-        indices, needed = [], Counter()
-        for i in range(len(all_arguments)):
-            if all_arguments[i]["required"]:
-                indices.append(i)
-                needed[all_arguments[i]["type"]] += 1
-        
-        return indices, needed
-    
-    def _get_optional_arguments(self, action: str) -> tuple[list[int]]:
-        if "args" not in self._commands[action]:
-            return dict(), Counter()
-        
-        all_arguments: list[dict] = self._commands[action]["args"]
-        
-        indices = []
-        for i in range(len(all_arguments)):
-            if not all_arguments[i]["required"]:
-                indices.append(i)
-        
-        return indices
-    
-    def _extract_tokens(self, query: str) -> list[tuple[str, bool]]:
-        lexer = shlex.shlex(query)
-        lexer.whitespace_split = True
+    def _handle_options(self, options: list[str], options_message = "Select an option:", select_message = "Enter an answer", key = lambda x: x) -> int:
+        print(options_message)
+        for i, option in enumerate(options, start=1):
+            print(f"{i}. {key(option)}")
+        print(f"{len(options) + 1}. Skip request")
 
-        tokens = []
-        quotes = {'"', "'"}
-        for token in lexer:
-            quoted = token[0] in quotes and token[-1] in quotes
-            if quoted:
-                if len(token) < 3:
-                    continue
-                tokens.append((token[1:len(token) - 1], quoted))
-            else:
-                tokens.append((token, quoted))
+        choice = input(f"{select_message} (1-{len(options) + 1}): ")
+        if choice.isdigit() and 1 <= int(choice) <= len(options):
+            return int(choice) - 1
         
-        return tokens
-    
-    def _extract_keywords_nonkeywords(self, tokens: list[tuple[str, bool]], probability_cutoff: float) -> tuple[list[str], list[tuple[str, bool]]]:
-        if probability_cutoff < 0 or probability_cutoff > 1:
-            raise ValueError(f"Probability cutoff must be in the interval [0, 1], value passed: {probability_cutoff}")
-
-        keywords = []
-        non_keywords = []
-        for token, quoted in tokens:
-            if quoted:
-                non_keywords.append((token, quoted))
-                continue
-
-            keyword = process.extractOne(token, self._wrapper.get_all_keywords(), scorer=fuzz.ratio, score_cutoff=probability_cutoff * 100)
-            if keyword:
-                keywords.append(keyword[0])
-            else:
-                non_keywords.append((token, quoted))
-        
-        return keywords, non_keywords
-    
-    def _extract_classified_non_keywords(self, non_keywords: list[tuple[str, bool]]) -> tuple[dict, dict]:
-        classified_non_keywords, classified_priority_non_keywords = defaultdict(list), defaultdict(list)
-        for token, quoted in non_keywords:
-            if not quoted and token in ENGLISH_STOP_WORDS:
-                continue
-
-            type = "any"
-            if token.isdecimal():
-                type = "int"
-            elif token.isalpha():
-                type = "str"
-            
-            if quoted:
-                classified_priority_non_keywords[type].append(token)
-            else:
-                classified_non_keywords[type].append(token)
-
-        return classified_non_keywords, classified_priority_non_keywords
-
-    def _extract_actions_normalised(self, keywords: list[str]) -> dict:
-        keywords_counter = Counter(keywords)
-
-        action_counter = Counter()
-        for keyword, count in keywords_counter.items():
-            actions = self._wrapper.get_actions_for_keyword(keyword)
-            for action in actions:
-                action_counter[action] += count
-        
-        actions_normalised = dict()
-        for action, keyword_count in action_counter.items():
-            actions_normalised[action] = keyword_count / action_counter.total()
-        
-        return actions_normalised
-
-    def _extract_action_frequency(self, actions_normalised: dict, probability_cutoff: float = 0.85) -> str | None:
-        if probability_cutoff < 0 or probability_cutoff > 1:
-            raise ValueError(f"Probability cutoff must be in the interval [0, 1], value passed: {probability_cutoff}")
-
-        if not actions_normalised:
-            return None
-
-        action_normalised = max(actions_normalised.items(), key = lambda action_normalised: action_normalised[1])
-        if action_normalised[1] < probability_cutoff:
-            return None
-        
-        return action_normalised[0]
+        return -1
     
     def _extract_required_arguments(self, action: str, required_indices: list[int], classified_non_keywords: dict, classified_priority_non_keywords: dict) -> list[str]:
         required_arguments = []
@@ -319,14 +202,126 @@ class Parser:
             optional_arguments[idx] = non_keyword
 
         return optional_arguments
+        
+    def canRunAction(self, action: str) -> bool:
+        if self._wrapper.has_action_warning(action):
+            answer = input(f"Do you want to, {self._wrapper.get_action_description(action)} (Y/N): ").lower()
+            if answer != 'y':
+                print("Skipping request...")
+                return False
+        return True
+
+    def extract_tokens(self, query: str) -> list[tuple[str, bool]]:
+        lexer = shlex.shlex(query)
+        lexer.whitespace_split = True
+
+        tokens = []
+        quotes = {'"', "'"}
+        for token in lexer:
+            quoted = token[0] in quotes and token[-1] in quotes
+            if quoted:
+                if len(token) < 3:
+                    continue
+                tokens.append((token[1:len(token) - 1], quoted))
+            else:
+                tokens.append((token, quoted))
+        
+        return tokens
     
-    def _extract_arguments(self, action: str, classified_non_keywords: dict, classified_priority_non_keywords: dict) -> list[str]:
+    def extract_keywords_nonkeywords(self, tokens: list[tuple[str, bool]], probability_cutoff: float) -> tuple[list[str], list[tuple[str, bool]]]:
+        if probability_cutoff < 0 or probability_cutoff > 1:
+            raise ValueError(f"Probability cutoff must be in the interval [0, 1], value passed: {probability_cutoff}")
+
+        keywords = []
+        non_keywords = []
+        for token, quoted in tokens:
+            if quoted:
+                non_keywords.append((token, quoted))
+                continue
+
+            keyword = process.extractOne(token, self._wrapper.get_all_keywords(), scorer=fuzz.ratio, score_cutoff=probability_cutoff * 100)
+            if keyword:
+                keywords.append(keyword[0])
+            else:
+                non_keywords.append((token, quoted))
+        
+        return keywords, non_keywords
+    
+    def extract_classified_non_keywords(self, non_keywords: list[tuple[str, bool]]) -> tuple[dict, dict]:
+        classified_non_keywords, classified_priority_non_keywords = defaultdict(list), defaultdict(list)
+        for token, quoted in non_keywords:
+            if not quoted and token in ENGLISH_STOP_WORDS:
+                continue
+
+            type = "any"
+            if token.isdecimal():
+                type = "int"
+            elif token.isalpha():
+                type = "str"
+            
+            if quoted:
+                classified_priority_non_keywords[type].append(token)
+            else:
+                classified_non_keywords[type].append(token)
+
+        return classified_non_keywords, classified_priority_non_keywords
+
+    def extract_actions_normalised(self, keywords: list[str]) -> dict:
+        keywords_counter = Counter(keywords)
+
+        action_counter = Counter()
+        for keyword, count in keywords_counter.items():
+            actions = self._wrapper.get_actions_for_keyword(keyword)
+            for action in actions:
+                action_counter[action] += count
+        
+        actions_normalised = dict()
+        for action, keyword_count in action_counter.items():
+            actions_normalised[action] = keyword_count / action_counter.total()
+        
+        return actions_normalised
+
+    def extract_action_frequency(self, actions_normalised: dict, probability_cutoff: float = 0.85) -> str | None:
+        if probability_cutoff < 0 or probability_cutoff > 1:
+            raise ValueError(f"Probability cutoff must be in the interval [0, 1], value passed: {probability_cutoff}")
+
+        if not actions_normalised:
+            return None
+
+        action_normalised = max(actions_normalised.items(), key = lambda action_normalised: action_normalised[1])
+        if action_normalised[1] < probability_cutoff:
+            return None
+        
+        return action_normalised[0]
+    
+    def extract_action_classification(self, keywords: list[str], top_actions_count: int) -> str | None:
+        try:
+            actions = self._wrapper.predict_top_actions(keywords, top_actions_count)
+        except Exception as e:
+            raise RuntimeError(f"Error extracting top actions: {e}")
+        
+        if actions[0][1] >= 0.85:
+            return actions[0][0]
+        else:
+            try:
+                answer = self._handle_options(actions, options_message = "What do you want to do?", key = lambda action: self._wrapper.get_action_description(action[0]))
+                print("-----------------------------")
+            except Exception as e:
+                raise RuntimeError(f"Error fetching answer: {e}")
+            
+            if answer == -1:
+                return None
+
+            self._wrapper.train(keywords, actions[answer][0])
+            return actions[answer][0]
+
+    def extract_arguments(self, action: str, classified_non_keywords: dict, classified_priority_non_keywords: dict) -> list[str]:
         if not self._wrapper.has_args(action):
             return []
 
         try:
-            required_indices, required_needed = self._get_required_arguments(action)
-            optional_indices = self._get_optional_arguments(action)
+            required_indices, required_needed = self._wrapper.get_required_arguments(action)
+            optional_indices = self._wrapper.get_optional_arguments(action)
         except Exception as e:
             raise RuntimeError(f"Error fetching arguments for action '{action}': {e}")
         
@@ -354,101 +349,3 @@ class Parser:
                 ptr2 += 1
 
         return arguments
-
-    def extract_action_arguments(self, query: str, probability_cutoff: float = 0.85) -> tuple[str | list[str]]:
-        try:
-            tokens: list[tuple[str | bool]] = self._extract_tokens(query)
-        except Exception as e:
-            raise SyntaxError(f"Syntax Error: {e}")
-
-        try:
-            keywords, non_keywords = self._extract_keywords_nonkeywords(tokens, probability_cutoff)
-        except Exception as e:
-            raise RuntimeError(f"Error extracting keywords: {e}")
-        
-        if not keywords:
-            raise SyntaxError("No keywords found")
-        
-        actions_normalised: dict = self._extract_actions_normalised(keywords)
-        
-        try:
-            action = self._extract_action_frequency(actions_normalised, probability_cutoff)
-        except Exception as e:
-            raise RuntimeError(f"Error extracting action: {e}")
-        
-        if not action:
-            try:
-                actions = self._wrapper.predict_top_actions(keywords, 5)
-            except Exception as e:
-                raise RuntimeError(f"Error extracting top actions: {e}")
-            
-            if actions[0][1] >= 0.85:
-                action = actions[0][0]
-            else:
-                try:
-                    answer = self._handle_options(actions, options_message = "What do you want to do?", key = lambda action: self._wrapper.get_action_description(action[0]))
-                    print("-----------------------------")
-                except Exception as e:
-                    raise RuntimeError(f"Error fetching answer: {e}")
-                
-                if answer == -1:
-                    return "", []
-
-                self._train(keywords, actions[answer][0])
-                action = actions[answer][0]
-
-        classified_non_keywords, classified_priority_non_keywords = self._extract_classified_non_keywords(non_keywords)
-
-        try:
-            arguments: list[str] = self._extract_arguments(action, classified_non_keywords, classified_priority_non_keywords)
-        except Exception as e:
-            raise SyntaxError(f"Error extracting arguments: {e}")
-        
-        return action, arguments
-    
-    def execute_action(self, action : str, arguments: list[str]) -> None:
-        if self._wrapper.has_action_warning(action):
-            answer = input(f"Do you want to, {self._wrapper.get_action_description(action)} (Y/N): ").lower()
-            if answer != 'y':
-                print("Skipping request...")
-                return
-            
-        command = " ".join([action] + arguments)
-            
-        subprocess.run(command, shell=True)
-        print("Command Executed: " + command)
-        print("-----------------------------")
-
-try:
-    parser: Parser = Parser()
-except Exception as e:
-    print(f"Error initialising parser: {e}")
-    print("-----------------------------")
-    exit(1)
-
-query: str = input("Enter request: ")
-print("-----------------------------")
-
-action: str | None = None
-while True:
-    try:
-        action, arguments = parser.extract_action_arguments(query)
-
-        if action:
-            break
-
-        print("Skipped request")
-        print("-----------------------------")
-    except Exception as e:
-        print(f"Error parsing query: {e}")
-        print("-----------------------------")
-
-    query = input(f"Enter request: ")
-    print("-----------------------------")
-
-if action == "exit":
-    print("Exiting application...")
-    print("-----------------------------")
-    exit(0)
-
-parser.execute_action(action, arguments)

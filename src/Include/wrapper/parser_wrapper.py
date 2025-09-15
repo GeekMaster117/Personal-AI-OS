@@ -8,7 +8,7 @@ from collections import defaultdict, Counter
 from collections.abc import KeysView
 
 from numpy import ndarray
-from sklearn.feature_extraction.text import CountVectorizer, ENGLISH_STOP_WORDS
+from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.linear_model import SGDClassifier
 from sklearn.pipeline import Pipeline, make_pipeline
 
@@ -88,17 +88,17 @@ class ParserWrapper:
             self._save_parser_state(current_commands_hash, keyword_action_map, pipeline, vectorizer, classifier)
 
         return keyword_action_map, pipeline, vectorizer, classifier
-    
-    def _train(self, keywords: list[str], action: str) -> None:
-        X = self._vectorizer.transform([" ".join(keywords)])
-        self._classifier.partial_fit(X, [action], classes = list(self._commands.keys()))
-
-        self._save_parser_state(self._commands_hash, self._keyword_action_map, self._pipeline, self._vectorizer, self._classifier)
 
     def _get_commands_hash(self, commands: dict) -> str:
         data_str = json.dumps(commands, sort_keys=True)
 
         return hashlib.md5(data_str.encode('utf-8')).hexdigest()
+    
+    def train(self, keywords: list[str], action: str) -> None:
+        X = self._vectorizer.transform([" ".join(keywords)])
+        self._classifier.partial_fit(X, [action], classes = list(self._commands.keys()))
+
+        self._save_parser_state(self._commands_hash, self._keyword_action_map, self._pipeline, self._vectorizer, self._classifier)
     
     def predict_top_actions(self, keywords: list[str], top_actions_count: int) -> list[tuple]:
         probabilities: ndarray = self._pipeline.predict_proba([" ".join(keywords)])[0]
