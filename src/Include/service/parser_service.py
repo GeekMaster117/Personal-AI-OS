@@ -1,102 +1,22 @@
-import os
 import subprocess
 
 import json
-import joblib
 import hashlib
 
-from numpy import ndarray
 from collections import defaultdict, Counter
 
 import shlex
 from rapidfuzz import process, fuzz
-from sklearn.feature_extraction.text import CountVectorizer, ENGLISH_STOP_WORDS
-from sklearn.linear_model import SGDClassifier
-from sklearn.pipeline import Pipeline, make_pipeline
+from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS
+
+from Include.wrapper.parser_wrapper import ParserWrapper
 
 class Parser:
-    _commands_path = "commands.json"
-    _parser_state_path = "parser_state.bin"
-
     def __init__(self):
         try:
-            with open(Parser._commands_path, 'r') as file:
-                self._commands: dict = json.load(file)
+            self._wrapper = ParserWrapper()
         except Exception as e:
-            raise RuntimeError(f"Error fetching from commands: {e}")
-        try:
-            self._commands_hash: str = self._get_commands_hash(self._commands)
-        except Exception as e:
-            raise RuntimeError(f"Error fetching commands hash: {e}")
-
-        try:
-            self.keyword_action_map, self._pipeline, self._vectorizer, self._classifier = self._load_parser_state(self._commands_hash)
-        except Exception as e:
-            raise RuntimeError(f"Error fetching parser state: {e}")
-        
-    def _save_parser_state(self, current_commands_hash: str, keyword_action_map: dict, pipeline: Pipeline, vectorizer: CountVectorizer, classifier: SGDClassifier) -> None:
-        state = {
-            "commands_hash": current_commands_hash,
-            "keyword_action_map": keyword_action_map,
-            "pipeline": pipeline,
-            "vectorizer": vectorizer,
-            "classifier": classifier
-        }
-        with open(Parser._parser_state_path, "wb") as file:
-            joblib.dump(state, file)
-    
-    def _load_parser_state(self, current_commands_hash: str) -> tuple[dict, Pipeline, CountVectorizer, SGDClassifier]:
-        try:
-            if not os.path.exists(Parser._parser_state_path):
-                raise FileNotFoundError("Parser state file not found")
-
-            with open(Parser._parser_state_path, "rb") as file:
-                state: dict = joblib.load(file)
-
-            load_commands_hash: str = state["commands_hash"]
-            keyword_action_map: dict = state["keyword_action_map"]
-            pipeline: Pipeline = state["pipeline"]
-            vectorizer: CountVectorizer = state["vectorizer"]
-            classifier: SGDClassifier = state["classifier"]
-        except Exception as e:
-            load_commands_hash = None
-            keyword_action_map = None
-            pipeline = None
-            vectorizer = None
-            classifier = None
-
-        if any(v is None for v in [load_commands_hash, keyword_action_map, pipeline, vectorizer, classifier]) or current_commands_hash != load_commands_hash:
-            try:
-                vectorizer = CountVectorizer()
-                classifier = SGDClassifier(loss="log_loss")
-                pipeline = make_pipeline(vectorizer, classifier)
-            except Exception as e:
-                raise RuntimeError(f"Error initialising pipeline: {e}")
-            
-            try:
-                keyword_action_map: dict = defaultdict(set)
-                keywords, actions = [], []
-
-                for action, structure in self._commands.items():
-                    keywords.append(" ".join(structure["keywords"]))
-                    actions.append(action)
-
-                    for keyword in structure["keywords"]:
-                        keyword_action_map[keyword].add(action)
-
-                pipeline.fit(keywords, actions)
-            except Exception as e:
-                raise RuntimeError(f"Error mapping commands keywords to actions: {e}")
-
-            self._save_parser_state(current_commands_hash, keyword_action_map, pipeline, vectorizer, classifier)
-
-        return keyword_action_map, pipeline, vectorizer, classifier
-    
-    def _train(self, keywords: list[str], action: str) -> None:
-        X = self._vectorizer.transform([" ".join(keywords)])
-        self._classifier.partial_fit(X, [action], classes = list(self._commands.keys()))
-
-        self._save_parser_state(self._commands_hash, self.keyword_action_map, self._pipeline, self._vectorizer, self._classifier)
+            raise RuntimeError(f"Error initialising parser wrapper: {e}")
 
     def _handle_options(self, options: list[str], options_message = "Select an option:", select_message = "Enter an answer", key = lambda x: x) -> int:
         print(options_message)
@@ -273,7 +193,7 @@ class Parser:
                 non_keywords.append((token, quoted))
                 continue
 
-            keyword = process.extractOne(token, self.keyword_action_map.keys(), scorer=fuzz.ratio, score_cutoff=probability_cutoff * 100)
+            keyword = process.extractOne(token, self._wrapper.get_all_keywords(), scorer=fuzz.ratio, score_cutoff=probability_cutoff * 100)
             if keyword:
                 keywords.append(keyword[0])
             else:
@@ -305,7 +225,7 @@ class Parser:
 
         action_counter = Counter()
         for keyword, count in keywords_counter.items():
-            actions = self.keyword_action_map[keyword]
+            actions = self._wrapper.get_actions_for_keyword(keyword)
             for action in actions:
                 action_counter[action] += count
         
@@ -327,21 +247,13 @@ class Parser:
             return None
         
         return action_normalised[0]
-
-    def _extract_actions_classification(self, keywords: list[str], top_actions_count: int) -> list[tuple]:
-        probabilities: ndarray = self._pipeline.predict_proba([" ".join(keywords)])[0]
-
-        classes = [(str(self._pipeline.classes_[idx]), float(probability)) for idx, probability in enumerate(probabilities)]
-        top_actions = sorted(classes, reverse=True, key = lambda x: x[1])[:min(len(probabilities), top_actions_count)]
-
-        return top_actions
     
     def _extract_required_arguments(self, action: str, required_indices: list[int], classified_non_keywords: dict, classified_priority_non_keywords: dict) -> list[str]:
         required_arguments = []
         any_type_argument_indices = []
         for idx in required_indices:
-            type = self._commands[action]["args"][idx]["type"]
-            description = self._commands[action]["args"][idx]["description"]
+            type = self._wrapper.get_action_args_type(action, idx)
+            description = self._wrapper.get_action_args_description(action, idx)
 
             if type == "any":
                 any_type_argument_indices.append(len(required_arguments))
@@ -358,7 +270,7 @@ class Parser:
                 required_arguments.append(non_keyword)
 
         for idx in any_type_argument_indices:
-            description = self._commands[action]["args"][idx]["description"]
+            description = self._wrapper.get_action_args_description(action, idx)
 
             try:
                 non_keyword = self._pop_non_keyword(type, description, classified_non_keywords, classified_priority_non_keywords)
@@ -376,8 +288,8 @@ class Parser:
         optional_arguments = []
         any_type_argumenet_indices = []
         for idx in optional_indices:
-            type = self._commands[action]["args"][idx]["type"]
-            description = self._commands[action]["args"][idx]["description"]
+            type = self._wrapper.get_action_args_type(action, idx)
+            description = self._wrapper.get_action_args_description(action, idx)
 
             if type == "any":
                 any_type_argumenet_indices.append(len(optional_arguments))
@@ -394,7 +306,7 @@ class Parser:
                 optional_arguments.append(non_keyword)
 
         for idx in any_type_argumenet_indices:
-            description = self._commands[action]["args"][idx]["description"]
+            description = self._wrapper.get_action_args_description(action, idx)
 
             try:
                 non_keyword = self._pop_non_keyword(type, description, classified_non_keywords, classified_priority_non_keywords)
@@ -409,7 +321,7 @@ class Parser:
         return optional_arguments
     
     def _extract_arguments(self, action: str, classified_non_keywords: dict, classified_priority_non_keywords: dict) -> list[str]:
-        if 'args' not in self._commands[action]:
+        if not self._wrapper.has_args(action):
             return []
 
         try:
@@ -466,7 +378,7 @@ class Parser:
         
         if not action:
             try:
-                actions = self._extract_actions_classification(keywords, 5)
+                actions = self._wrapper.predict_top_actions(keywords, 5)
             except Exception as e:
                 raise RuntimeError(f"Error extracting top actions: {e}")
             
@@ -474,7 +386,7 @@ class Parser:
                 action = actions[0][0]
             else:
                 try:
-                    answer = self._handle_options(actions, options_message = "What do you want to do?", key = lambda action: self._commands[action[0]]["description"])
+                    answer = self._handle_options(actions, options_message = "What do you want to do?", key = lambda action: self._wrapper.get_action_description(action[0]))
                     print("-----------------------------")
                 except Exception as e:
                     raise RuntimeError(f"Error fetching answer: {e}")
@@ -495,8 +407,8 @@ class Parser:
         return action, arguments
     
     def execute_action(self, action : str, arguments: list[str]) -> None:
-        if self._commands[action]["warning"] == True:
-            answer = input(f"Do you want to, {self._commands[action]["description"]} (Y/N): ").lower()
+        if self._wrapper.has_action_warning(action):
+            answer = input(f"Do you want to, {self._wrapper.get_action_description(action)} (Y/N): ").lower()
             if answer != 'y':
                 print("Skipping request...")
                 return
@@ -505,6 +417,7 @@ class Parser:
             
         subprocess.run(command, shell=True)
         print("Command Executed: " + command)
+        print("-----------------------------")
 
 try:
     parser: Parser = Parser()
