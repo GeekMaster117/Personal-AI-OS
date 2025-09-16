@@ -5,8 +5,8 @@ from collections import defaultdict, Counter
 
 import shlex
 from rapidfuzz import process, fuzz
-from sklearn.feature_extraction.text import ENGLISH_STOP_WORDS
 
+from Include.filter.stop_words import ENGLISH_STOP_WORDS
 from Include.wrapper.parser_wrapper import ParserWrapper
 
 class ParserService:
@@ -109,7 +109,7 @@ class ParserService:
         if len(non_keywords) == 1:
             return pop(non_keywords, borrowed_dict, borrowed_types.popitem()[0])
         
-        answer = self.handle_options(non_keywords, options_message = f"What is, {description}")
+        answer = self._handle_options(non_keywords, options_message = f"What is, {description}")
         if answer == -1:
             return None
         
@@ -242,7 +242,10 @@ class ParserService:
             keyword = process.extractOne(token, self._wrapper.get_all_keywords(), scorer=fuzz.ratio, score_cutoff=probability_cutoff * 100)
             if keyword:
                 keywords.append(keyword[0])
-            else:
+                continue
+            
+            stop_word = process.extractOne(token, ENGLISH_STOP_WORDS, scorer=fuzz.ratio, score_cutoff=probability_cutoff * 100)
+            if not stop_word:
                 non_keywords.append((token, quoted))
         
         return keywords, non_keywords
@@ -250,9 +253,6 @@ class ParserService:
     def extract_classified_non_keywords(self, non_keywords: list[tuple[str, bool]]) -> tuple[dict, dict]:
         classified_non_keywords, classified_priority_non_keywords = defaultdict(list), defaultdict(list)
         for token, quoted in non_keywords:
-            if not quoted and token in ENGLISH_STOP_WORDS:
-                continue
-
             type = "any"
             if token.isdecimal():
                 type = "int"
