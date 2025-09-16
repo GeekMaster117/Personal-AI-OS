@@ -9,12 +9,12 @@ sql_dir: str = "sql"
 schema_dir: str = sql_dir + "/schema.sql"
 fetch_all_apps_titles_dir: str = sql_dir + "/fetch_all_apps_titles.sql"
 
-llama_library_dir: str = "bin"
+library_dir: str = "bin"
+
 cache_dir: str = "cache"
 model_dir: str = "models/Phi-3-mini-4k-instruct-q4.gguf"
 
-commands_dir: str = "commands.json"
-parser_state_dir: str = "parser_state.bin"
+parser_model_dir: str = library_dir + "/parser_model.bin"
 
 total_model_layers: int = 32
 model_window_size: int = 2048

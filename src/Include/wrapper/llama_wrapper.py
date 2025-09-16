@@ -38,7 +38,7 @@ class LlamaCPP:
         best_device_info = LlamaCPP._get_device_info(gpu_optimal_batchsize, cpu_optimal_batchsize, gpu = gpu_acceleration)
 
         if best_device_info['arch'] in settings.supported_arch:
-            ctypes.CDLL(settings.llama_library_dir + "/llama.dll")
+            ctypes.CDLL(settings.library_dir + "/llama.dll")
 
         import llama_cpp
 

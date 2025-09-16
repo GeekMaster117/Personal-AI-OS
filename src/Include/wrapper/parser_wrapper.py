@@ -1,104 +1,59 @@
 import os
 
-import json
 import joblib
-import hashlib
 
-from collections import defaultdict, Counter
+from collections import Counter
 from collections.abc import KeysView
 
 from numpy import ndarray
-from sklearn.feature_extraction.text import CountVectorizer
-from sklearn.linear_model import SGDClassifier
-from sklearn.pipeline import Pipeline, make_pipeline
+from typing import Any
 
 import settings
 
 class ParserWrapper:
     def __init__(self):
         try:
-            with open(settings.commands_dir, 'r') as file:
-                self._commands: dict = json.load(file)
+            self._commands, self._keyword_action_map, self._pipeline, self._vectorizer, self._classifier = self._load_parser_model()
         except Exception as e:
-            raise RuntimeError(f"Error fetching from commands: {e}")
-        try:
-            self._commands_hash: str = self._get_commands_hash(self._commands)
-        except Exception as e:
-            raise RuntimeError(f"Error fetching commands hash: {e}")
+            raise RuntimeError(f"Error fetching parser model: {e}")
 
-        try:
-            self._keyword_action_map, self._pipeline, self._vectorizer, self._classifier = self._load_parser_state(self._commands_hash)
-        except Exception as e:
-            raise RuntimeError(f"Error fetching parser state: {e}")
-        
-    def _save_parser_state(self, current_commands_hash: str, keyword_action_map: dict, pipeline: Pipeline, vectorizer: CountVectorizer, classifier: SGDClassifier) -> None:
-        state = {
-            "commands_hash": current_commands_hash,
+    def _save_parser_model(self, commands: dict, keyword_action_map: dict, pipeline: Any, vectorizer: Any, classifier: Any) -> None:
+        model = {
+            "commands": commands,
             "keyword_action_map": keyword_action_map,
             "pipeline": pipeline,
             "vectorizer": vectorizer,
             "classifier": classifier
         }
-        with open(settings.parser_state_dir, "wb") as file:
-            joblib.dump(state, file)
+        with open(settings.parser_model_dir, "wb") as file:
+            joblib.dump(model, file)
     
-    def _load_parser_state(self, current_commands_hash: str) -> tuple[dict, Pipeline, CountVectorizer, SGDClassifier]:
+    def _load_parser_model(self) -> tuple[dict, dict, Any, Any, Any]:
+        if not os.path.exists(settings.parser_model_dir):
+            raise FileNotFoundError("Parser model file not found")
+
         try:
-            if not os.path.exists(settings.parser_state_dir):
-                raise FileNotFoundError("Parser state file not found")
-
-            with open(settings.parser_state_dir, "rb") as file:
-                state: dict = joblib.load(file)
-
-            load_commands_hash: str = state["commands_hash"]
-            keyword_action_map: dict = state["keyword_action_map"]
-            pipeline: Pipeline = state["pipeline"]
-            vectorizer: CountVectorizer = state["vectorizer"]
-            classifier: SGDClassifier = state["classifier"]
+            with open(settings.parser_model_dir, "rb") as file:
+                model: dict = joblib.load(file)
         except Exception as e:
-            load_commands_hash = None
-            keyword_action_map = None
-            pipeline = None
-            vectorizer = None
-            classifier = None
+            raise RuntimeError(f"Error loading parser model file: {e}")
 
-        if any(v is None for v in [load_commands_hash, keyword_action_map, pipeline, vectorizer, classifier]) or current_commands_hash != load_commands_hash:
-            try:
-                vectorizer = CountVectorizer()
-                classifier = SGDClassifier(loss="log_loss")
-                pipeline = make_pipeline(vectorizer, classifier)
-            except Exception as e:
-                raise RuntimeError(f"Error initialising pipeline: {e}")
-            
-            try:
-                keyword_action_map: dict = defaultdict(set)
-                keywords, actions = [], []
+        try:
+            commands: dict = model["commands"]
+            keyword_action_map: dict = model["keyword_action_map"]
+            pipeline: Any = model["pipeline"]
+            vectorizer: Any = model["vectorizer"]
+            classifier: Any = model["classifier"]
+        except Exception as e:
+            raise RuntimeError(f"Error extracting parser model components: {e}")
 
-                for action, structure in self._commands.items():
-                    keywords.append(" ".join(structure["keywords"]))
-                    actions.append(action)
-
-                    for keyword in structure["keywords"]:
-                        keyword_action_map[keyword].add(action)
-
-                pipeline.fit(keywords, actions)
-            except Exception as e:
-                raise RuntimeError(f"Error mapping commands keywords to actions: {e}")
-
-            self._save_parser_state(current_commands_hash, keyword_action_map, pipeline, vectorizer, classifier)
-
-        return keyword_action_map, pipeline, vectorizer, classifier
-
-    def _get_commands_hash(self, commands: dict) -> str:
-        data_str = json.dumps(commands, sort_keys=True)
-
-        return hashlib.md5(data_str.encode('utf-8')).hexdigest()
+        return commands, keyword_action_map, pipeline, vectorizer, classifier
     
     def train(self, keywords: list[str], action: str) -> None:
         X = self._vectorizer.transform([" ".join(keywords)])
         self._classifier.partial_fit(X, [action], classes = list(self._commands.keys()))
 
-        self._save_parser_state(self._commands_hash, self._keyword_action_map, self._pipeline, self._vectorizer, self._classifier)
+        self._save_parser_model(self._commands, self._keyword_action_map, self._pipeline, self._vectorizer, self._classifier)
     
     def predict_top_actions(self, keywords: list[str], top_actions_count: int) -> list[tuple]:
         probabilities: ndarray = self._pipeline.predict_proba([" ".join(keywords)])[0]
