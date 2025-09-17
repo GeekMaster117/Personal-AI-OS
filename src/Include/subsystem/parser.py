@@ -16,31 +16,36 @@ class Parser:
             raise SyntaxError(f"Syntax Error: {e}")
 
         try:
-            keywords, non_keywords = self._service.extract_keywords_nonkeywords(tokens, probability_cutoff)
+            action_keywords, non_keywords_organised, non_keywords_flat = self._service.extract_actionkeywords_nonkeywords(tokens, probability_cutoff)
         except Exception as e:
             raise RuntimeError(f"Error extracting keywords: {e}")
         
-        if not keywords:
+        if not action_keywords:
             raise SyntaxError("No keywords found")
 
-        actions_normalised: dict = self._service.extract_actions_normalised(keywords)
+        actions_normalised: dict = self._service.extract_actions_normalised(action_keywords)
 
         try:
             action = self._service.extract_action_frequency(actions_normalised, probability_cutoff)
             if not action:
-                action = self._service.extract_action_classification(keywords, 5)
+                action = self._service.extract_action_classification(action_keywords, 5)
         except Exception as e:
             raise RuntimeError(f"Error extracting action: {e}")
         
         if not action:
             return "", []
-
-        classified_non_keywords, classified_priority_non_keywords = self._service.extract_classified_non_keywords(non_keywords)
-
+        
         try:
-            arguments: list[str] = self._service.extract_arguments(action, classified_non_keywords, classified_priority_non_keywords)
+            required_indices, required_needed = self._service.get_required_arguments(action)
+            optional_indices = self._service.get_optional_arguments(action)
         except Exception as e:
-            raise SyntaxError(f"Error extracting arguments: {e}")
+            raise RuntimeError(f"Error fetching arguments for action '{action}': {e}")
+        
+        classified_non_keywords, classified_priority_non_keywords = self._service.extract_classified_non_keywords(action, non_keywords_flat)
+
+        self._service.check_argument_availability_else_throw(required_needed, classified_non_keywords, classified_priority_non_keywords)
+
+        arguments, unassigned_required_indices, unassigned_optional_indices = self._service.extract_arguments_type_mapping(action, classified_non_keywords, classified_priority_non_keywords, required_indices, optional_indices)
         
         return action, arguments
     
