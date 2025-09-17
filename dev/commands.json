@@ -3,6 +3,7 @@
         "keywords": ["create", "make", "new", "folder", "directory", "mk", "mkdir"],
         "args": [
             {
+                "keywords": ["called", "name", "named", "title", "titled", "label", "labeled"],
                 "type": "any",
                 "required": true,
                 "description": "Name of the folder"
@@ -15,6 +16,7 @@
         "keywords": ["delete", "remove", "folder", "directory", "rm", "rmdir"],
         "args": [
             {
+                "keywords": ["called", "name", "named", "title", "titled", "label", "labeled"],
                 "type": "any",
                 "required": true,
                 "description": "Name of the folder"

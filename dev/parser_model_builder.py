@@ -17,24 +17,49 @@ except Exception as e:
     raise RuntimeError(f"Error loading commands: {e}")
 
 try:
-    vectorizer = CountVectorizer()
-    classifier = SGDClassifier(loss="log_loss")
-    pipeline = make_pipeline(vectorizer, classifier)
+    action_vectorizer = CountVectorizer()
+    action_classifier = SGDClassifier(loss="log_loss")
+    action_pipeline = make_pipeline(action_vectorizer, action_classifier)
+
+    for structure in commands.values():
+        structure["argument_vectorizer"] = CountVectorizer()
+        structure["argument_classifier"] = SGDClassifier(loss="log_loss")
+        structure["argument_pipeline"] = make_pipeline(structure["argument_vectorizer"], structure["argument_classifier"])
 except Exception as e:
     raise RuntimeError(f"Error initialising pipeline: {e}")
 
 try:
     keyword_action_map: dict = defaultdict(set)
-    keywords, actions = [], []
+    action_keywords, actions = [], []
 
     for action, structure in commands.items():
-        keywords.append(" ".join(structure["keywords"]))
-        actions.append(action)
-
         for keyword in structure["keywords"]:
             keyword_action_map[keyword].add(action)
 
-    pipeline.fit(keywords, actions)
+        action_keywords.append(" ".join(structure["keywords"]))
+        actions.append(action)
+
+        del structure["keywords"]
+
+        structure["keyword_argument_map"] = defaultdict(set)
+
+        if 'args' not in structure or len(structure["args"]) <= 1:
+            continue
+
+        argument_keywords, arguments = [], []
+
+        for idx, arg in enumerate(structure["args"]):
+            for keyword in arg["keywords"]:
+                structure["keyword_argument_map"][keyword].add(idx)
+
+            argument_keywords.append(" ".join(arg["keywords"]))
+            arguments.append(idx)
+
+            del arg["keywords"]
+
+        structure["argument_pipeline"].fit(argument_keywords, arguments)
+
+    action_pipeline.fit(action_keywords, actions)
 except Exception as e:
     raise RuntimeError(f"Error mapping commands keywords to actions: {e}")
 
@@ -42,9 +67,9 @@ try:
     model = {
         "commands": commands,
         "keyword_action_map": keyword_action_map,
-        "pipeline": pipeline,
-        "vectorizer": vectorizer,
-        "classifier": classifier
+        "action_pipeline": action_pipeline,
+        "action_vectorizer": action_vectorizer,
+        "action_classifier": action_classifier
     }
     with open(settings.parser_model_dir, "wb") as file:
         joblib.dump(model, file)
