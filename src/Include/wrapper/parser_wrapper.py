@@ -5,9 +5,12 @@ import joblib
 from collections import Counter
 from collections.abc import KeysView
 
+from rapidfuzz import process, fuzz
+
 from numpy import ndarray
 from typing import Any
 
+from Include.filter.stop_words import ENGLISH_STOP_WORDS
 import settings
 
 class ParserWrapper:
@@ -21,9 +24,9 @@ class ParserWrapper:
         model = {
             "commands": commands,
             "keyword_action_map": keyword_action_map,
-            "pipeline": pipeline,
-            "vectorizer": vectorizer,
-            "classifier": classifier
+            "action_pipeline": pipeline,
+            "action_vectorizer": vectorizer,
+            "action_classifier": classifier
         }
         with open(settings.parser_model_dir, "wb") as file:
             joblib.dump(model, file)
@@ -41,9 +44,9 @@ class ParserWrapper:
         try:
             commands: dict = model["commands"]
             keyword_action_map: dict = model["keyword_action_map"]
-            pipeline: Any = model["pipeline"]
-            vectorizer: Any = model["vectorizer"]
-            classifier: Any = model["classifier"]
+            pipeline: Any = model["action_pipeline"]
+            vectorizer: Any = model["action_vectorizer"]
+            classifier: Any = model["action_classifier"]
         except Exception as e:
             raise RuntimeError(f"Error extracting parser model components: {e}")
 
@@ -63,6 +66,30 @@ class ParserWrapper:
 
         return top_actions
     
+    def match_action_keyword(self, token: str, probability_cutoff: float) -> str | None:
+        if probability_cutoff < 0 or probability_cutoff > 1:
+            raise ValueError(f"Probability cutoff must be in the interval [0, 1], value passed: {probability_cutoff}")
+        
+        keyword = process.extractOne(token, self.get_action_keywords(), scorer=fuzz.ratio, score_cutoff=probability_cutoff * 100)
+        if keyword:
+            return keyword[0]
+        return None
+
+    def match_argument_keyword(self, action: str, token: str, probability_cutoff: float) -> str | None:
+        if probability_cutoff < 0 or probability_cutoff > 1:
+            raise ValueError(f"Probability cutoff must be in the interval [0, 1], value passed: {probability_cutoff}")
+
+        keyword = process.extractOne(token, self.get_argument_keywords(action), scorer=fuzz.ratio, score_cutoff=probability_cutoff * 100)
+        if keyword:
+            return keyword[0]
+        return None
+
+    def is_stop_word(self, token: str, probability_cutoff: float) -> bool:
+        if probability_cutoff < 0 or probability_cutoff > 1:
+            raise ValueError(f"Probability cutoff must be in the interval [0, 1], value passed: {probability_cutoff}")
+        
+        return process.extractOne(token, ENGLISH_STOP_WORDS, scorer=fuzz.ratio, score_cutoff=probability_cutoff * 100) is not None
+
     def has_args(self, action: str) -> bool:
         return "args" in self._commands[action] and len(self._commands[action]["args"]) > 0
     
@@ -75,8 +102,11 @@ class ParserWrapper:
 
         return self._commands[action]["description"]
 
-    def get_all_keywords(self) -> KeysView[str]:
+    def get_action_keywords(self) -> KeysView[str]:
         return self._keyword_action_map.keys()
+    
+    def get_argument_keywords(self, action: str) -> KeysView[str]:
+        return self._commands[action]["keyword_argument_map"].keys()
     
     def get_actions_for_keyword(self, keyword: str) -> set[str]:
         return self._keyword_action_map.get(keyword, set())
