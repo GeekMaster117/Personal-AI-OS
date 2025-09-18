@@ -144,11 +144,10 @@ class ParserService:
         
         return tokens
     
-    def extract_actionkeywords_nonkeywords(self, tokens: list[tuple[str, bool]], probability_cutoff: float) -> tuple[list[str], list[list[tuple]]]:
+    def extract_action_keywords_groups(self, tokens: list[tuple[str, bool]], probability_cutoff: float) -> tuple[list[str], list[list[tuple]]]:
         action_keywords = []
 
-        non_keywords_organised = []
-        non_keywords_flat = []
+        action_groups = []
         non_keywords = []
 
         for token, quoted in tokens:
@@ -161,8 +160,7 @@ class ParserService:
                 action_keywords.append(action_keyword)
 
                 if non_keywords:
-                    non_keywords_organised.append(non_keywords)
-                    non_keywords_flat.extend(non_keywords)
+                    action_groups.append(non_keywords)
                     non_keywords = []
 
                 continue
@@ -171,12 +169,35 @@ class ParserService:
                 non_keywords.append((token, quoted))
 
         if non_keywords:
-            non_keywords_organised.append(non_keywords)
+            action_groups.append(non_keywords)
+
+        return action_keywords, action_groups
+    
+    def extract_nonkeywords_argument_groups(self, action: str, action_groups: list[list[tuple[str, bool]]], probability_cutoff: float) -> tuple[list[str], list[tuple[str, bool]]]:
+        argument_groups = []
+        non_keywords_flat = []
+
+        for group in action_groups:
+            argument_keywords = []
+            non_keywords = []
+
+            for token, quoted in group:
+                if quoted:
+                    non_keywords.append((token, quoted))
+                    continue
+
+                argument_keyword = self._wrapper.match_argument_keyword(action, token, probability_cutoff)
+                if argument_keyword:
+                    argument_keywords.append(argument_keyword)
+                else:
+                    non_keywords.append((token, quoted))
+                
+            argument_groups.append((argument_keywords, non_keywords))
             non_keywords_flat.extend(non_keywords)
+            
+        return non_keywords_flat, argument_groups
 
-        return action_keywords, non_keywords_organised, non_keywords_flat
-
-    def extract_classified_non_keywords(self, action: str, non_keywords: list[tuple[str, bool]]) -> tuple[dict, dict]:
+    def extract_classified_non_keywords(self, non_keywords: list[tuple[str, bool]]) -> tuple[dict, dict]:
         classified_non_keywords, classified_priority_non_keywords = defaultdict(list), defaultdict(list)
         for token, quoted in non_keywords:
             type = "any"
@@ -207,7 +228,7 @@ class ParserService:
         
         return actions_normalised
 
-    def extract_action_frequency(self, actions_normalised: dict, probability_cutoff: float = 0.85) -> str | None:
+    def predict_action_frequency(self, actions_normalised: dict, probability_cutoff: float = 0.85) -> str | None:
         if probability_cutoff < 0 or probability_cutoff > 1:
             raise ValueError(f"Probability cutoff must be in the interval [0, 1], value passed: {probability_cutoff}")
 
@@ -220,7 +241,7 @@ class ParserService:
         
         return action_normalised[0]
     
-    def extract_action_classification(self, keywords: list[str], top_actions_count: int) -> str | None:
+    def predict_action_classification(self, keywords: list[str], top_actions_count: int) -> str | None:
         try:
             actions = self._wrapper.predict_top_actions(keywords, top_actions_count)
         except Exception as e:
