@@ -213,33 +213,26 @@ class ParserService:
 
         return classified_non_keywords, classified_priority_non_keywords
 
-    def extract_actions_normalised(self, keywords: list[str]) -> dict:
-        keywords_counter = Counter(keywords)
+    def predict_action_frequency(self, action_keywords: list[str], probability_cutoff: float = 0.85) -> str | None:
+        if probability_cutoff < 0 or probability_cutoff > 1:
+            raise ValueError(f"Probability cutoff must be in the interval [0, 1], value passed: {probability_cutoff}")
+
+        if not action_keywords:
+            return None
+
+        keywords_counter = Counter(action_keywords)
 
         action_counter = Counter()
         for keyword, count in keywords_counter.items():
             actions = self._wrapper.get_actions_for_keyword(keyword)
             for action in actions:
                 action_counter[action] += count
-        
-        actions_normalised = dict()
-        for action, keyword_count in action_counter.items():
-            actions_normalised[action] = keyword_count / action_counter.total()
-        
-        return actions_normalised
 
-    def predict_action_frequency(self, actions_normalised: dict, probability_cutoff: float = 0.85) -> str | None:
-        if probability_cutoff < 0 or probability_cutoff > 1:
-            raise ValueError(f"Probability cutoff must be in the interval [0, 1], value passed: {probability_cutoff}")
-
-        if not actions_normalised:
-            return None
-
-        action_normalised = max(actions_normalised.items(), key = lambda action_normalised: action_normalised[1])
-        if action_normalised[1] < probability_cutoff:
+        max_frequency_action = max(action_counter.items(), key = lambda action_counter: action_counter[1])
+        if max_frequency_action[1] / action_counter.total() < probability_cutoff:
             return None
         
-        return action_normalised[0]
+        return max_frequency_action[0]
     
     def predict_action_classification(self, keywords: list[str], top_actions_count: int) -> str | None:
         try:
@@ -261,6 +254,27 @@ class ParserService:
 
             self._wrapper.train(keywords, actions[answer][0])
             return actions[answer][0]
+
+    def predict_argument_frequency(self, action: str, argument_keywords: list[str], probability_cutoff: float = 0.85) -> str | None:
+        if probability_cutoff < 0 or probability_cutoff > 1:
+            raise ValueError(f"Probability cutoff must be in the interval [0, 1], value passed: {probability_cutoff}")
+
+        if not argument_keywords:
+            return None
+
+        argument_keywords_counter = Counter(argument_keywords)
+
+        argument_counter = Counter()
+        for keyword, count in argument_keywords_counter.items():
+            arguments = self._wrapper.get_arguments_for_keyword(action, keyword)
+            for argument in arguments:
+                argument_counter[argument] += count
+
+        max_frequency_argument = max(argument_counter.items(), key = lambda argument_counter: argument_counter[1])
+        if max_frequency_argument[1] / argument_counter.total() < probability_cutoff:
+            return None
+
+        return max_frequency_argument[0]
 
     def extract_arguments_type_mapping(self, action: str, classified_non_keywords: dict, classified_priority_non_keywords: dict, required_indices: list[int], optional_indices: list[int]) -> tuple[list[str], list[int], list[int]]:
         required_arguments, unassigned_required_indices = self._extract_arguments_type_matching(action, required_indices, classified_non_keywords, classified_priority_non_keywords)
