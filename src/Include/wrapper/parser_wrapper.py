@@ -110,6 +110,9 @@ class ParserWrapper:
     
     def get_actions_for_keyword(self, keyword: str) -> set[str]:
         return self._keyword_action_map.get(keyword, set())
+    
+    def get_arguments_for_keyword(self, action: str, keyword: str) -> set[int]:
+        return self._commands[action]["keyword_argument_map"].get(keyword, set())
 
     def get_required_arguments(self, action: str) -> tuple[list[int], Counter]:
         if "args" not in self._commands[action]:

@@ -26,12 +26,9 @@ class Parser:
         if not action_keywords:
             raise SyntaxError("No keywords found")
         
-        # Extract normalised values of actions
-        actions_normalised: dict = self._service.extract_actions_normalised(action_keywords)
-        
         # Predict action using frequency method first, then classification method if frequency method fails
         try:
-            action = self._service.predict_action_frequency(actions_normalised, probability_cutoff)
+            action = self._service.predict_action_frequency(action_keywords, probability_cutoff)
             if not action:
                 action = self._service.predict_action_classification(action_keywords, 5)
         except Exception as e:
