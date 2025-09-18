@@ -43,7 +43,7 @@ try:
 
         structure["keyword_argument_map"] = defaultdict(set)
 
-        if 'args' not in structure or len(structure["args"]) <= 1:
+        if 'args' not in structure:
             continue
 
         argument_keywords, arguments = [], []
@@ -56,6 +56,9 @@ try:
             arguments.append(idx)
 
             del arg["keywords"]
+
+        if len(structure["args"]) <= 1:
+            continue
 
         structure["argument_pipeline"].fit(argument_keywords, arguments)
 
