@@ -17,14 +17,10 @@ except Exception as e:
     raise RuntimeError(f"Error loading commands: {e}")
 
 try:
-    action_vectorizer = CountVectorizer()
-    action_classifier = SGDClassifier(loss="log_loss")
-    action_pipeline = make_pipeline(action_vectorizer, action_classifier)
+    action_pipeline = make_pipeline(CountVectorizer(), SGDClassifier(loss="log_loss"))
 
     for structure in commands.values():
-        structure["argument_vectorizer"] = CountVectorizer()
-        structure["argument_classifier"] = SGDClassifier(loss="log_loss")
-        structure["argument_pipeline"] = make_pipeline(structure["argument_vectorizer"], structure["argument_classifier"])
+        structure["argument_pipeline"] = make_pipeline(CountVectorizer(), SGDClassifier(loss="log_loss"))
 except Exception as e:
     raise RuntimeError(f"Error initialising pipeline: {e}")
 
@@ -42,9 +38,6 @@ try:
         del structure["keywords"]
 
         structure["keyword_argument_map"] = defaultdict(set)
-
-        if 'args' not in structure:
-            continue
 
         argument_keywords, arguments = [], []
 
@@ -70,9 +63,7 @@ try:
     model = {
         "commands": commands,
         "keyword_action_map": keyword_action_map,
-        "action_pipeline": action_pipeline,
-        "action_vectorizer": action_vectorizer,
-        "action_classifier": action_classifier
+        "action_pipeline": action_pipeline
     }
     with open(settings.parser_model_dir, "wb") as file:
         joblib.dump(model, file)

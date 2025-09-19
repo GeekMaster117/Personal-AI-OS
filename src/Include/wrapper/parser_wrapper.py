@@ -16,22 +16,20 @@ import settings
 class ParserWrapper:
     def __init__(self):
         try:
-            self._commands, self._keyword_action_map, self._pipeline, self._vectorizer, self._classifier = self._load_parser_model()
+            self._commands, self._keyword_action_map, self._action_pipeline = self._load_parser_model()
         except Exception as e:
             raise RuntimeError(f"Error fetching parser model: {e}")
 
-    def _save_parser_model(self, commands: dict, keyword_action_map: dict, pipeline: Any, vectorizer: Any, classifier: Any) -> None:
+    def _save_parser_model(self, commands: dict, keyword_action_map: dict, pipeline: Any) -> None:
         model = {
             "commands": commands,
             "keyword_action_map": keyword_action_map,
             "action_pipeline": pipeline,
-            "action_vectorizer": vectorizer,
-            "action_classifier": classifier
         }
         with open(settings.parser_model_dir, "wb") as file:
             joblib.dump(model, file)
     
-    def _load_parser_model(self) -> tuple[dict, dict, Any, Any, Any]:
+    def _load_parser_model(self) -> tuple[dict, dict, Any]:
         if not os.path.exists(settings.parser_model_dir):
             raise FileNotFoundError("Parser model file not found")
 
@@ -44,27 +42,51 @@ class ParserWrapper:
         try:
             commands: dict = model["commands"]
             keyword_action_map: dict = model["keyword_action_map"]
-            pipeline: Any = model["action_pipeline"]
-            vectorizer: Any = model["action_vectorizer"]
-            classifier: Any = model["action_classifier"]
+            action_pipeline: Any = model["action_pipeline"]
         except Exception as e:
             raise RuntimeError(f"Error extracting parser model components: {e}")
 
-        return commands, keyword_action_map, pipeline, vectorizer, classifier
+        return commands, keyword_action_map, action_pipeline
     
-    def train(self, keywords: list[str], action: str) -> None:
-        X = self._vectorizer.transform([" ".join(keywords)])
-        self._classifier.partial_fit(X, [action], classes = list(self._commands.keys()))
+    def train_action_pipeline(self, action_keywords: list[str], action: str) -> None:
+        X = self._action_pipeline.named_steps["countvectorizer"].transform([" ".join(action_keywords)])
+        self._action_pipeline.named_steps["sgdclassifier"].partial_fit(X, [action])
 
-        self._save_parser_model(self._commands, self._keyword_action_map, self._pipeline, self._vectorizer, self._classifier)
+        self._save_parser_model(self._commands, self._keyword_action_map, self._action_pipeline)
+
+    def train_argument_pipeline(self, action: str, argument_keywords: list[str], argument_index: int) -> None:
+        if action not in self._commands:
+            raise ValueError(f"Action '{action}' not found in commands")
+        if "argument_pipeline" not in self._commands[action]:
+            raise ValueError(f"Argument '{argument_index}' has no argument pipeline")
+
+        argument_pipeline = self._commands[action]["argument_pipeline"]
+        X = argument_pipeline.named_steps["countvectorizer"].transform([" ".join(argument_keywords)])
+        argument_pipeline.named_steps["sgdclassifier"].partial_fit(X, [argument_index])
+
+        self._save_parser_model(self._commands, self._keyword_action_map, self._action_pipeline)
     
-    def predict_top_actions(self, keywords: list[str], top_actions_count: int) -> list[tuple]:
-        probabilities: ndarray = self._pipeline.predict_proba([" ".join(keywords)])[0]
+    def predict_top_actions(self, keywords: list[str], max_possibilities: int) -> list[tuple]:
+        probabilities: ndarray = self._action_pipeline.predict_proba([" ".join(keywords)])[0]
 
-        classes = [(str(self._pipeline.classes_[idx]), float(probability)) for idx, probability in enumerate(probabilities)]
-        top_actions = sorted(classes, reverse=True, key = lambda x: x[1])[:min(len(probabilities), top_actions_count)]
+        classes = [(str(self._action_pipeline.classes_[idx]), float(probability)) for idx, probability in enumerate(probabilities)]
+        top_actions = sorted(classes, reverse=True, key = lambda x: x[1])[:min(len(probabilities), max_possibilities)]
 
         return top_actions
+    
+    def predict_top_arguments_indices(self, action: str, keywords: list[str], max_possibilities: int) -> list[tuple]:
+        if action not in self._commands:
+            raise ValueError(f"Action '{action}' not found in commands")
+        if "argument_pipeline" not in self._commands[action]:
+            raise ValueError(f"Action '{action}' has no argument pipeline")
+        
+        argument_pipeline = self._commands[action]["argument_pipeline"]
+        probabilities: ndarray = argument_pipeline.predict_proba([" ".join(keywords)])[0]
+
+        classes = [(int(argument_pipeline.classes_[idx]), float(probability)) for idx, probability in enumerate(probabilities)]
+        top_arguments_indices = sorted(classes, reverse=True, key = lambda x: x[1])[:min(len(probabilities), max_possibilities)]
+
+        return top_arguments_indices
     
     def match_action_keyword(self, token: str, probability_cutoff: float) -> str | None:
         if probability_cutoff < 0 or probability_cutoff > 1:
@@ -89,14 +111,16 @@ class ParserWrapper:
             raise ValueError(f"Probability cutoff must be in the interval [0, 1], value passed: {probability_cutoff}")
         
         return process.extractOne(token, ENGLISH_STOP_WORDS, scorer=fuzz.ratio, score_cutoff=probability_cutoff * 100) is not None
-
-    def has_args(self, action: str) -> bool:
-        return "args" in self._commands[action] and len(self._commands[action]["args"]) > 0
     
     def has_action_warning(self, action: str) -> bool:
-        return "warning" in self._commands[action] and self._commands[action]["warning"]
+        if action not in self._commands:
+            raise ValueError(f"Action '{action}' not found in commands")
+
+        return self._commands[action]["warning"]
     
     def get_action_description(self, action: str) -> str:
+        if action not in self._commands:
+            raise ValueError(f"Action '{action}' not found in commands")
         if "description" not in self._commands[action]:
             raise ValueError(f"Action '{action}' has no description")
 
@@ -106,17 +130,29 @@ class ParserWrapper:
         return self._keyword_action_map.keys()
     
     def get_argument_keywords(self, action: str) -> KeysView[str]:
+        if action not in self._commands:
+            raise ValueError(f"Action '{action}' not found in commands")
+        if "keyword_argument_map" not in self._commands[action]:
+            raise ValueError(f"Action '{action}' has no argument keywords")
+
         return self._commands[action]["keyword_argument_map"].keys()
     
     def get_actions_for_keyword(self, keyword: str) -> set[str]:
         return self._keyword_action_map.get(keyword, set())
     
-    def get_arguments_for_keyword(self, action: str, keyword: str) -> set[int]:
+    def get_argument_indices_for_keyword(self, action: str, keyword: str) -> set[int]:
+        if action not in self._commands:
+            raise ValueError(f"Action '{action}' not found in commands")
+        if "keyword_argument_map" not in self._commands[action]:
+            raise ValueError(f"Action '{action}' has no argument keywords")
+
         return self._commands[action]["keyword_argument_map"].get(keyword, set())
 
     def get_required_arguments(self, action: str) -> tuple[list[int], Counter]:
+        if action not in self._commands:
+            raise ValueError(f"Action '{action}' not found in commands")
         if "args" not in self._commands[action]:
-            return [], Counter()
+            raise ValueError(f"Action '{action}' has no arguments")
         
         all_arguments: list[dict] = self._commands[action]["args"]
         
@@ -129,6 +165,8 @@ class ParserWrapper:
         return indices, needed
     
     def get_optional_arguments(self, action: str) -> tuple[list[int]]:
+        if action not in self._commands:
+            raise ValueError(f"Action '{action}' not found in commands")
         if "args" not in self._commands[action]:
             return []
         
@@ -141,7 +179,9 @@ class ParserWrapper:
         
         return indices
     
-    def get_action_args_type(self, action: str, idx: int) -> str:
+    def get_argument_type(self, action: str, idx: int) -> str:
+        if action not in self._commands:
+            raise ValueError(f"Action '{action}' not found in commands")
         if "args" not in self._commands[action]:
             raise ValueError(f"Action '{action}' has no arguments")
         
@@ -152,7 +192,9 @@ class ParserWrapper:
 
         return all_arguments[idx]["type"]
     
-    def get_action_args_description(self, action: str, idx: int) -> str:
+    def get_argument_description(self, action: str, idx: int) -> str:
+        if action not in self._commands:
+            raise ValueError(f"Action '{action}' not found in commands")
         if "args" not in self._commands[action]:
             raise ValueError(f"Action '{action}' has no arguments")
         
@@ -162,3 +204,11 @@ class ParserWrapper:
             raise IndexError(f"Argument index {idx} out of range for action '{action}'")
 
         return all_arguments[idx]["description"]
+    
+    def get_arguments_count(self, action: str) -> int:
+        if action not in self._commands:
+            raise ValueError(f"Action '{action}' not found in commands")
+        if "args" not in self._commands[action]:
+            return 0
+        
+        return len(self._commands[action]["args"])

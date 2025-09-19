@@ -9,7 +9,7 @@ class Parser:
         except Exception as e:
             raise RuntimeError(f"Error initialising parser service: {e}")
         
-    def extract_action_arguments(self, query: str, probability_cutoff: float = 0.85) -> tuple[str | list[str]]:
+    def extract_action_arguments(self, query: str, probability_cutoff: float = 0.85) -> tuple[str, list[str]] | None:
         # Extract tokens from query
         try:
             tokens: list[tuple[str | bool]] = self._service.extract_tokens(query)
@@ -30,13 +30,13 @@ class Parser:
         try:
             action = self._service.predict_action_frequency(action_keywords, probability_cutoff)
             if not action:
-                action = self._service.predict_action_classification(action_keywords, 5)
+                action = self._service.predict_action_classification(action_keywords, 5, probability_cutoff)
         except Exception as e:
             raise RuntimeError(f"Error extracting action: {e}")
         
         # If action is None, user has requested to skip the request
         if not action:
-            return "", []
+            return None
         
         # Extract non keywords and argument groups(a group contains argument keywords and their respective non keywords) from action groups
         try:
@@ -44,20 +44,27 @@ class Parser:
         except Exception as e:
             raise RuntimeError(f"Error extracting argument keywords: {e}")
         
-        # Fetch required and optional argument indices for the action
-        try:
-            required_indices, required_needed = self._service.get_required_arguments(action)
-            optional_indices = self._service.get_optional_arguments(action)
-        except Exception as e:
-            raise RuntimeError(f"Error fetching arguments for action '{action}': {e}")
+        arguments = [None] * self._service.get_arguments_count(action)
         
-        # Extract classified non keywords and classified priority non keywords(priority non keywords are quoted non keywords) from non keywords. Classified into variable types
-        classified_non_keywords, classified_priority_non_keywords = self._service.extract_classified_non_keywords(non_keywords)
+        while argument_groups[-1][0]:
+            group = argument_groups[-1]
 
-        # Check if all required arguments are available, else throw error
-        self._service.check_argument_availability_else_throw(required_needed, classified_non_keywords, classified_priority_non_keywords)
+            # Predict argument index using frequency method first, then classification method if frequency method fails
+            argument_index, non_keyword = None, None
+            try:
+                argument_index, non_keyword = self._service.predict_argument_nonkeyword_frequency(action, group, probability_cutoff)
+                if not argument_index:
+                    argument_index, non_keyword = self._service.predict_argument_nonkeyword_classification(action, group, 5)
+                if not argument_index:
+                    return None
 
-        arguments, unassigned_required_indices, unassigned_optional_indices = self._service.extract_arguments_type_mapping(action, classified_non_keywords, classified_priority_non_keywords, required_indices, optional_indices)
+                arguments[argument_index] = non_keyword
+            except SyntaxError:
+                print("Warning: Valid values for some arguments may not have been found")
+            except Exception as e:
+                raise RuntimeError(f"Error extracting argument: {e}")
+            
+            argument_groups.pop()
         
         return action, arguments
     

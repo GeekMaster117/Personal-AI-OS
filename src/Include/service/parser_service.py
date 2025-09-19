@@ -49,7 +49,10 @@ class ParserService:
         arguments = []
         any_type_indices = []
         for idx in indices:
-            type = self._wrapper.get_action_args_type(action, idx)
+            try:
+                type = self._wrapper.get_action_args_type(action, idx)
+            except Exception as e:
+                raise RuntimeError(f"Error fetching argument type for action '{action}' and index '{idx}': {e}")
 
             if type == "any":
                 any_type_indices.append(len(arguments))
@@ -65,6 +68,35 @@ class ParserService:
         unassigned_indices = [i for i, arg in enumerate(arguments) if arg is None]
 
         return arguments, unassigned_indices
+    
+    def _extract_argumentgroup_options(self, action: str, argument_indices: list[int], non_keywords: list[str], throw_if_exceed_count: int = float('inf')) -> list[tuple[int, str]]:
+        classified_non_keywords, classified_priority_non_keywords = self.extract_classified_non_keywords(non_keywords)
+
+        options = []
+        for idx in argument_indices:
+            type = self._wrapper.get_argument_type(action, idx)
+
+            if type == "any":
+                if classified_priority_non_keywords:
+                    for non_keywords in classified_priority_non_keywords.values():
+                        for non_keyword in non_keywords:
+                            options.append((idx, non_keyword))
+                else:
+                    for non_keywords in classified_non_keywords.values():
+                        for non_keyword in non_keywords:
+                            options.append((idx, non_keyword))
+            else:
+                if type in classified_priority_non_keywords:
+                    for non_keyword in classified_priority_non_keywords[type]:
+                        options.append((idx, non_keyword))
+                elif type in classified_non_keywords:
+                    for non_keyword in classified_non_keywords[type]:
+                        options.append((idx, non_keyword))
+
+            if len(options) > throw_if_exceed_count:
+                raise RuntimeError(f"Too many possibilities")
+        
+        return options
     
     def check_argument_availability_else_throw(self, required_needed: Counter, classified_non_keywords: dict, classified_priority_non_keywords: dict) -> bool:
         def get_type_count(type: str) -> int:
@@ -120,12 +152,136 @@ class ParserService:
                     non_any_type_count -= required
         
     def canRunAction(self, action: str) -> bool:
-        if self._wrapper.has_action_warning(action):
-            answer = input(f"Do you want to, {self._wrapper.get_action_description(action)} (Y/N): ").lower()
-            if answer != 'y':
-                print("Skipping request...")
-                return False
-        return True
+        try:
+            if self._wrapper.has_action_warning(action):
+                answer = input(f"Do you want to, {self._wrapper.get_action_description(action)} (Y/N): ").lower()
+                if answer != 'y':
+                    print("Skipping request...")
+                    return False
+            return True
+        except Exception as e:
+            raise RuntimeError(f"Error checking if action can run: {e}")
+
+    def predict_action_frequency(self, action_keywords: list[str], probability_cutoff: float = 0.85) -> str | None:
+        if probability_cutoff < 0 or probability_cutoff > 1:
+            raise ValueError(f"Probability cutoff must be in the interval [0, 1], value passed: {probability_cutoff}")
+
+        if not action_keywords:
+            return None
+
+        keywords_counter = Counter(action_keywords)
+
+        action_counter = Counter()
+        for keyword, count in keywords_counter.items():
+            try:
+                actions = self._wrapper.get_actions_for_keyword(keyword)
+            except Exception as e:
+                raise RuntimeError(f"Error fetching actions for keyword '{keyword}': {e}")
+            
+            for action in actions:
+                action_counter[action] += count
+
+        max_frequency_action = max(action_counter.items(), key = lambda action_counter: action_counter[1])
+        if max_frequency_action[1] / action_counter.total() < probability_cutoff:
+            return None
+        
+        return max_frequency_action[0]
+
+    def predict_action_classification(self, keywords: list[str], max_possibilities: int, probability_cutoff: float = 0.85) -> str | None:
+        try:
+            actions = self._wrapper.predict_top_actions(keywords, max_possibilities)
+        except Exception as e:
+            raise RuntimeError(f"Error extracting top actions: {e}")
+        
+        if actions[0][1] >= probability_cutoff:
+            return actions[0][0]
+        else:
+            try:
+                answer = self._handle_options(actions, options_message = "What do you want to do?", key = lambda action: self._wrapper.get_action_description(action[0]))
+                print("-----------------------------")
+            except Exception as e:
+                raise RuntimeError(f"Error fetching answer: {e}")
+            
+            if answer == -1:
+                return None
+
+            try:
+                self._wrapper.train_action_pipeline(keywords, actions[answer][0])
+            except Exception as e:
+                print("Warning: Unable to train parser:", e)
+            
+            return actions[answer][0]
+
+    def predict_argument_nonkeyword_frequency(self, action: str, argument_group: tuple[list[str], list[str]], probability_cutoff: float = 0.85) -> str | None:
+        if probability_cutoff < 0 or probability_cutoff > 1:
+            raise ValueError(f"Probability cutoff must be in the interval [0, 1], value passed: {probability_cutoff}")
+        
+        argument_keywords, non_keywords = argument_group
+        if not argument_keywords:
+            return None
+
+        argument_keywords_counter = Counter(argument_keywords)
+
+        argument_counter = Counter()
+        for keyword, count in argument_keywords_counter.items():
+            try:
+                argument_indices = self._wrapper.get_argument_indices_for_keyword(action, keyword)
+            except Exception as e:
+                raise RuntimeError(f"Error fetching argument indices for keyword '{keyword}' and action '{action}': {e}")
+            
+            for idx in argument_indices:
+                argument_counter[idx] += count
+
+        max_frequency_argument = max(argument_counter.items(), key = lambda argument_counter: argument_counter[1])
+        if max_frequency_argument[1] / argument_counter.total() < probability_cutoff:
+            return None
+
+    def predict_argument_nonkeyword_classification(self, action: str, argument_group: tuple[list[str], list[str]], max_possibilites: int, probability_cutoff: float = 0.85) -> tuple[int, str] | tuple[None, None]:
+        def handle_argument_group_options(indices: list[int]) -> tuple[int, str | None] | None:
+            try:
+                options = self._extract_argumentgroup_options(action, indices, non_keywords, 1)
+            except Exception as e:
+                print("Warning: Too many possibilities, please refine your query")
+                return None
+            
+            if not options:
+                raise SyntaxError("No valid arguments found")
+
+            if len(options) == 1:
+                return options[0]
+            
+            try:
+                answer = self._handle_options(options, options_message = "Which of these is correct?", key = lambda option: f"{self._wrapper.get_argument_description(action, option[0])}: {option[1]}")
+                print("-----------------------------")
+            except Exception as e:
+                raise RuntimeError(f"Error fetching answer: {e}")
+            
+            if answer == -1:
+                return None
+            
+            try:
+                self._wrapper.train_argument_pipeline(action, argument_keywords, options[answer][0])
+            except Exception as e:
+                print("Warning: Unable to train parser:", e)
+            
+            return options[answer]
+
+        if probability_cutoff < 0 or probability_cutoff > 1:
+            raise ValueError(f"Probability cutoff must be in the interval [0, 1], value passed: {probability_cutoff}")
+
+        argument_keywords, non_keywords = argument_group
+
+        try:
+            arguments = self._wrapper.predict_top_arguments_indices(action, argument_keywords, max_possibilites)
+        except Exception as e:
+            raise RuntimeError(f"Error extracting top arguments: {e}")
+        
+        if arguments[0][1] >= probability_cutoff:
+            return handle_argument_group_options([arguments[0][0]])
+        else:
+            indices = [arg[0] for arg in arguments]
+            return handle_argument_group_options(indices)
+            
 
     def extract_tokens(self, query: str) -> list[tuple[str, bool]]:
         lexer = shlex.shlex(query)
@@ -154,8 +310,12 @@ class ParserService:
             if quoted:
                 non_keywords.append((token, quoted))
                 continue
+            
+            try:
+                action_keyword = self._wrapper.match_action_keyword(token, probability_cutoff)
+            except Exception as e:
+                raise RuntimeError(f"Error matching action keyword: {e}")
 
-            action_keyword = self._wrapper.match_action_keyword(token, probability_cutoff)
             if action_keyword:
                 action_keywords.append(action_keyword)
 
@@ -165,16 +325,21 @@ class ParserService:
 
                 continue
             
-            if not self._wrapper.is_stop_word(token, probability_cutoff):
-                non_keywords.append((token, quoted))
+            try:
+                if not self._wrapper.is_stop_word(token, probability_cutoff):
+                    non_keywords.append((token, quoted))
+            except Exception as e:
+                raise RuntimeError(f"Error checking stop word: {e}")
 
         if non_keywords:
             action_groups.append(non_keywords)
 
         return action_keywords, action_groups
     
-    def extract_nonkeywords_argument_groups(self, action: str, action_groups: list[list[tuple[str, bool]]], probability_cutoff: float) -> tuple[list[str], list[tuple[str, bool]]]:
-        argument_groups = []
+    def extract_nonkeywords_argument_groups(self, action: str, action_groups: list[list[tuple[str, bool]]], probability_cutoff: float) -> tuple[list[str], list[tuple[list, list]]]:
+        priority_groups = []
+        blind_groups = []
+
         non_keywords_flat = []
 
         for group in action_groups:
@@ -185,17 +350,25 @@ class ParserService:
                 if quoted:
                     non_keywords.append((token, quoted))
                     continue
+                
+                try:
+                    argument_keyword = self._wrapper.match_argument_keyword(action, token, probability_cutoff)
+                except Exception as e:
+                    raise RuntimeError(f"Error matching argument keyword: {e}")
 
-                argument_keyword = self._wrapper.match_argument_keyword(action, token, probability_cutoff)
                 if argument_keyword:
                     argument_keywords.append(argument_keyword)
                 else:
                     non_keywords.append((token, quoted))
-                
-            argument_groups.append((argument_keywords, non_keywords))
+
+            if argument_keywords:
+                priority_groups.append((argument_keywords, non_keywords))
+            else:
+                blind_groups.append((argument_keywords, non_keywords))
+            
             non_keywords_flat.extend(non_keywords)
             
-        return non_keywords_flat, argument_groups
+        return non_keywords_flat, blind_groups + priority_groups
 
     def extract_classified_non_keywords(self, non_keywords: list[tuple[str, bool]]) -> tuple[dict, dict]:
         classified_non_keywords, classified_priority_non_keywords = defaultdict(list), defaultdict(list)
@@ -212,69 +385,6 @@ class ParserService:
                 classified_non_keywords[type].append(token)
 
         return classified_non_keywords, classified_priority_non_keywords
-
-    def predict_action_frequency(self, action_keywords: list[str], probability_cutoff: float = 0.85) -> str | None:
-        if probability_cutoff < 0 or probability_cutoff > 1:
-            raise ValueError(f"Probability cutoff must be in the interval [0, 1], value passed: {probability_cutoff}")
-
-        if not action_keywords:
-            return None
-
-        keywords_counter = Counter(action_keywords)
-
-        action_counter = Counter()
-        for keyword, count in keywords_counter.items():
-            actions = self._wrapper.get_actions_for_keyword(keyword)
-            for action in actions:
-                action_counter[action] += count
-
-        max_frequency_action = max(action_counter.items(), key = lambda action_counter: action_counter[1])
-        if max_frequency_action[1] / action_counter.total() < probability_cutoff:
-            return None
-        
-        return max_frequency_action[0]
-    
-    def predict_action_classification(self, keywords: list[str], top_actions_count: int) -> str | None:
-        try:
-            actions = self._wrapper.predict_top_actions(keywords, top_actions_count)
-        except Exception as e:
-            raise RuntimeError(f"Error extracting top actions: {e}")
-        
-        if actions[0][1] >= 0.85:
-            return actions[0][0]
-        else:
-            try:
-                answer = self._handle_options(actions, options_message = "What do you want to do?", key = lambda action: self._wrapper.get_action_description(action[0]))
-                print("-----------------------------")
-            except Exception as e:
-                raise RuntimeError(f"Error fetching answer: {e}")
-            
-            if answer == -1:
-                return None
-
-            self._wrapper.train(keywords, actions[answer][0])
-            return actions[answer][0]
-
-    def predict_argument_frequency(self, action: str, argument_keywords: list[str], probability_cutoff: float = 0.85) -> str | None:
-        if probability_cutoff < 0 or probability_cutoff > 1:
-            raise ValueError(f"Probability cutoff must be in the interval [0, 1], value passed: {probability_cutoff}")
-
-        if not argument_keywords:
-            return None
-
-        argument_keywords_counter = Counter(argument_keywords)
-
-        argument_counter = Counter()
-        for keyword, count in argument_keywords_counter.items():
-            arguments = self._wrapper.get_arguments_for_keyword(action, keyword)
-            for argument in arguments:
-                argument_counter[argument] += count
-
-        max_frequency_argument = max(argument_counter.items(), key = lambda argument_counter: argument_counter[1])
-        if max_frequency_argument[1] / argument_counter.total() < probability_cutoff:
-            return None
-
-        return max_frequency_argument[0]
 
     def extract_arguments_type_mapping(self, action: str, classified_non_keywords: dict, classified_priority_non_keywords: dict, required_indices: list[int], optional_indices: list[int]) -> tuple[list[str], list[int], list[int]]:
         required_arguments, unassigned_required_indices = self._extract_arguments_type_matching(action, required_indices, classified_non_keywords, classified_priority_non_keywords)
@@ -298,7 +408,19 @@ class ParserService:
         return arguments, unassigned_required_indices, unassigned_optional_indices
     
     def get_required_arguments(self, action: str) -> tuple[list[int], Counter]:
-        return self._wrapper.get_required_arguments(action)
+        try:
+            return self._wrapper.get_required_arguments(action)
+        except Exception as e:
+            raise RuntimeError(f"Error fetching required arguments for action '{action}': {e}")
         
     def get_optional_arguments(self, action: str) -> tuple[list[int]]:
-        return self._wrapper.get_optional_arguments(action)
+        try:
+            return self._wrapper.get_optional_arguments(action)
+        except Exception as e:
+            raise RuntimeError(f"Error fetching optional arguments for action '{action}': {e}")
+        
+    def get_arguments_count(self, action: str) -> int:
+        try:
+            return self._wrapper.get_arguments_count(action)
+        except Exception as e:
+            raise RuntimeError(f"Error fetching arguments count for action '{action}': {e}")

@@ -27,6 +27,7 @@
     },
     "exit": {
         "keywords": ["exit", "quit", "close", "shutdown", "stop", "bye"],
+        "args": [],
         "description": "Exit application",
         "warning": false
     }
