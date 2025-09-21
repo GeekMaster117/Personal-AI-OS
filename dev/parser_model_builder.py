@@ -55,7 +55,8 @@ try:
 
         structure["argument_pipeline"].fit(argument_keywords, arguments)
 
-    action_pipeline.fit(action_keywords, actions)
+    if len(commands) > 1:
+        action_pipeline.fit(action_keywords, actions)
 except Exception as e:
     raise RuntimeError(f"Error mapping commands keywords to actions: {e}")
 

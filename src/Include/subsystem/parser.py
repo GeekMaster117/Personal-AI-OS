@@ -31,14 +31,17 @@ class Parser:
         # Predict action using frequency method first, then classification method if frequency method fails
         try:
             action = self._service.predict_action_frequency(action_keywords, probability_cutoff)
+
             if not action:
-                action = self._service.predict_action_classification(action_keywords, 5, probability_cutoff)
+                action, skip = self._service.predict_action_classification(action_keywords, 5, probability_cutoff)
+            if skip:
+                return None, []
         except Exception as e:
             raise RuntimeError(f"Error predicting action: {e}")
         
         # If action is None, user has requested to skip the request
         if action is None:
-            return None
+            return None, []
         
         # Extract argument groups(a group contains argument keywords and their respective non keywords) and blind non keyword(non keywords with no argument keywords associated) from action groups
         try:
@@ -54,11 +57,14 @@ class Parser:
             # Predict argument index using frequency method first, then classification method if frequency method fails
             argument_index, non_keyword = None, None
             try:
-                argument_index, non_keyword = self._service.predict_argument_nonkeyword_frequency(action, group, 5, probability_cutoff)
+                argument_index, non_keyword, skip = self._service.predict_argument_nonkeyword_frequency(action, group, 5, probability_cutoff)
+                if skip:
+                    return None, []
+
                 if argument_index is None:
-                    argument_index, non_keyword = self._service.predict_argument_nonkeyword_classification(action, group, 5, probability_cutoff)
-                if argument_index is None:
-                    return None
+                    argument_index, non_keyword, skip = self._service.predict_argument_nonkeyword_classification(action, group, 5, probability_cutoff)
+                if skip:
+                    return None, []
 
                 arguments[argument_index] = non_keyword
             except SyntaxError:
@@ -76,13 +82,14 @@ class Parser:
         except Exception as e:
             raise RuntimeError(f"Error extracting unassigned arguments: {e}")
 
-        try:
-            required_arguments_typemapping, optional_arguments_typemapping, unassigned_required_indices, unassigned_optional_indices = self._service.extract_arguments_typemapping(action, unassigned_required_indices, unassigned_optional_indices, classified_nonkeywords, classified_priority_nonkeywords)
-        except Exception as e:
-            raise RuntimeError(f"Error extracting arguments using type mapping: {e}")
+        if unassigned_required_indices or unassigned_optional_indices:
+            try:
+                required_arguments_typemapping, optional_arguments_typemapping, unassigned_required_indices, unassigned_optional_indices = self._service.extract_arguments_typemapping(action, unassigned_required_indices, unassigned_optional_indices, classified_nonkeywords, classified_priority_nonkeywords)
+            except Exception as e:
+                raise RuntimeError(f"Error extracting arguments using type mapping: {e}")
         
-        required_arguments = heapq.merge(required_arguments, required_arguments_typemapping, key = lambda argument: argument[0])
-        optional_arguments = heapq.merge(optional_arguments, optional_arguments_typemapping, key = lambda argument: argument[0])
+            required_arguments = heapq.merge(required_arguments, required_arguments_typemapping, key = lambda argument: argument[0])
+            optional_arguments = heapq.merge(optional_arguments, optional_arguments_typemapping, key = lambda argument: argument[0])
         
         if unassigned_required_indices:
             required_arguments_questions = self._service.extract_arguments_questions(action, unassigned_required_indices, classified_nonkeywords, classified_priority_nonkeywords)

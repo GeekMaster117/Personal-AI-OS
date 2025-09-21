@@ -49,6 +49,9 @@ class ParserWrapper:
         return commands, keyword_action_map, action_pipeline
     
     def train_action_pipeline(self, action_keywords: list[str], action: str) -> None:
+        if len(self._commands) <= 1:
+            return
+
         X = self._action_pipeline.named_steps["countvectorizer"].transform([" ".join(action_keywords)])
         self._action_pipeline.named_steps["sgdclassifier"].partial_fit(X, [action])
 
@@ -59,6 +62,9 @@ class ParserWrapper:
             raise ValueError(f"Action '{action}' not found in commands")
         if "argument_pipeline" not in self._commands[action]:
             raise ValueError(f"Argument '{argument_index}' has no argument pipeline")
+        
+        if len(self._commands[action]['args']) <= 1:
+            return
 
         argument_pipeline = self._commands[action]["argument_pipeline"]
         X = argument_pipeline.named_steps["countvectorizer"].transform([" ".join(argument_keywords)])

@@ -23,7 +23,7 @@ class ParserService:
         
         return -1
     
-    def _handle_argument_group_options(self, action: str, argument_indices: list[int], argument_group: tuple[list[str], set[tuple]], max_possibilities: int) -> tuple[int, str] | tuple[None, None]:
+    def _handle_argument_group_options(self, action: str, argument_indices: list[int], argument_group: tuple[list[str], set[tuple]], max_possibilities: int, train: bool) -> tuple[int, str] | tuple[None, None]:
         argument_keywords, non_keywords = argument_group
 
         try:
@@ -47,10 +47,11 @@ class ParserService:
         if answer == -1:
             return None, None
         
-        try:
-            self._wrapper.train_argument_pipeline(action, argument_keywords, options[answer][0])
-        except Exception as e:
-            print("Warning: Unable to train parser:", e)
+        if train:
+            try:
+                self._wrapper.train_argument_pipeline(action, argument_keywords, options[answer][0])
+            except Exception as e:
+                print("Warning: Unable to train parser:", e)
         
         return options[answer]
 
@@ -200,9 +201,6 @@ class ParserService:
         if probability_cutoff < 0 or probability_cutoff > 1:
             raise ValueError(f"Probability cutoff must be in the interval [0, 1], value passed: {probability_cutoff}")
 
-        if not action_keywords:
-            return None
-
         keywords_counter = Counter(action_keywords)
 
         action_counter = Counter()
@@ -219,42 +217,38 @@ class ParserService:
         if max_frequency_action[1] / action_counter.total() < probability_cutoff:
             return None
         
-        return max_frequency_action[0]
+        return max_frequency_action[0] 
 
-    def predict_action_classification(self, action_keywords: list[str], max_possibilities: int, probability_cutoff: float = 0.85) -> str | None:
+    def predict_action_classification(self, action_keywords: list[str], max_possibilities: int, probability_cutoff: float = 0.85) -> tuple[str | None, bool]:
         try:
             actions = self._wrapper.predict_top_actions(action_keywords, max_possibilities, probability_cutoff)
         except Exception as e:
             raise RuntimeError(f"Error extracting top actions: {e}")
         
         if actions[0][1] >= probability_cutoff:
-            return actions[0][0]
-        else:
-            try:
-                answer = self._handle_options(actions, options_message = "What do you want to do?", key = lambda action: self._wrapper.get_action_description(action[0]))
-                print("-----------------------------")
-            except Exception as e:
-                raise RuntimeError(f"Error fetching answer: {e}")
-            
-            if answer == -1:
-                return None
+            return actions[0][0], False
+        
+        try:
+            answer = self._handle_options(actions, options_message = "What do you want to do?", key = lambda action: self._wrapper.get_action_description(action[0]))
+            print("-----------------------------")
+        except Exception as e:
+            raise RuntimeError(f"Error fetching answer: {e}")
+        
+        if answer == -1:
+            return None, True
 
-            try:
-                self._wrapper.train_action_pipeline(action_keywords, actions[answer][0])
-            except Exception as e:
-                print("Warning: Unable to train parser:", e)
-            
-            return actions[answer][0]
+        try:
+            self._wrapper.train_action_pipeline(action_keywords, actions[answer][0])
+        except Exception as e:
+            print("Warning: Unable to train parser:", e)
+        
+        return actions[answer][0], False
 
-    def predict_argument_nonkeyword_frequency(self, action: str, argument_group: tuple[list[str], set[tuple]], max_possibilities: int, probability_cutoff: float = 0.85) -> tuple[int, str] | tuple[None, None]:
+    def predict_argument_nonkeyword_frequency(self, action: str, argument_group: tuple[list[str], set[tuple]], max_possibilities: int, probability_cutoff: float = 0.85) -> tuple[int, str, bool] | tuple[None, None, bool]:
         if probability_cutoff < 0 or probability_cutoff > 1:
             raise ValueError(f"Probability cutoff must be in the interval [0, 1], value passed: {probability_cutoff}")
         
-        argument_keywords = argument_group[0]
-        if not argument_keywords:
-            return None
-
-        argument_keywords_counter = Counter(argument_keywords)
+        argument_keywords_counter = Counter(argument_group[0])
 
         argument_counter = Counter()
         for keyword, count in argument_keywords_counter.items():
@@ -268,11 +262,14 @@ class ParserService:
 
         max_frequency_argument = max(argument_counter.items(), key = lambda argument_counter: argument_counter[1])
         if max_frequency_argument[1] / argument_counter.total() < probability_cutoff:
-            return None
+            return None, None, False
         
-        return self._handle_argument_group_options(action, [max_frequency_argument[0]], argument_group, max_possibilities)
+        argument_index, non_keyword = self._handle_argument_group_options(action, [max_frequency_argument[0]], argument_group, max_possibilities, False)
+        if argument_index is None:
+            return None, None, True
+        return argument_index, non_keyword, False
 
-    def predict_argument_nonkeyword_classification(self, action: str, argument_group: tuple[list[str], set[tuple]], max_possibilites: int, probability_cutoff: float = 0.85) -> tuple[int, str] | tuple[None, None]:
+    def predict_argument_nonkeyword_classification(self, action: str, argument_group: tuple[list[str], set[tuple]], max_possibilites: int, probability_cutoff: float = 0.85) -> tuple[int, str, bool] | tuple[None, None, bool]:
         if probability_cutoff < 0 or probability_cutoff > 1:
             raise ValueError(f"Probability cutoff must be in the interval [0, 1], value passed: {probability_cutoff}")
 
@@ -284,10 +281,14 @@ class ParserService:
             raise RuntimeError(f"Error extracting top arguments: {e}")
         
         if arguments[0][1] >= probability_cutoff:
-            return self._handle_argument_group_options(action, [arguments[0][0]], argument_group, max_possibilites)
+            argument_index, non_keyword = self._handle_argument_group_options(action, [arguments[0][0]], argument_group, max_possibilites, False)
         else:
             indices = [arg[0] for arg in arguments]
-            return self._handle_argument_group_options(action, indices, argument_group, max_possibilites)
+            argument_index, non_keyword = self._handle_argument_group_options(action, indices, argument_group, max_possibilites, True)
+        
+        if argument_index is None:
+            return None, None, True
+        return argument_index, non_keyword, False
             
     def extract_tokens(self, query: str) -> list[tuple[str, bool]]:
         lexer = shlex.shlex(query)
