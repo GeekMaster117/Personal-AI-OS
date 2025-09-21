@@ -28,7 +28,7 @@ class ParserService:
 
         try:
             options = self._extract_argumentgroup_options(action, argument_indices, non_keywords, max_possibilities)
-        except Exception as e:
+        except SyntaxError as e:
             print("Warning: Too many possibilities")
             raise SyntaxError("Too many possibilities")
         
@@ -181,7 +181,7 @@ class ParserService:
                         options.append((idx, non_keyword))
 
             if len(options) > throw_if_exceed_count:
-                raise RuntimeError(f"Too many possibilities")
+                raise SyntaxError(f"Too many possibilities")
         
         return options
         
@@ -270,7 +270,7 @@ class ParserService:
         if max_frequency_argument[1] / argument_counter.total() < probability_cutoff:
             return None
         
-        return self._handle_argument_group_options(action, [max_frequency_argument], argument_group, max_possibilities)
+        return self._handle_argument_group_options(action, [max_frequency_argument[0]], argument_group, max_possibilities)
 
     def predict_argument_nonkeyword_classification(self, action: str, argument_group: tuple[list[str], set[tuple]], max_possibilites: int, probability_cutoff: float = 0.85) -> tuple[int, str] | tuple[None, None]:
         if probability_cutoff < 0 or probability_cutoff > 1:
