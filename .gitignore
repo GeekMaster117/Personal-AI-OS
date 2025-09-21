@@ -217,5 +217,6 @@ cache/
 # Custom Ignore Files
 device_config.json
 commands_hash.txt
+parser_model.bin
 
 .vscode/
