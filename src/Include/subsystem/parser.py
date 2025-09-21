@@ -1,3 +1,5 @@
+import heapq
+
 import subprocess
 
 from Include.service.parser_service import ParserService
@@ -32,17 +34,17 @@ class Parser:
             if not action:
                 action = self._service.predict_action_classification(action_keywords, 5, probability_cutoff)
         except Exception as e:
-            raise RuntimeError(f"Error extracting action: {e}")
+            raise RuntimeError(f"Error predicting action: {e}")
         
         # If action is None, user has requested to skip the request
         if not action:
             return None
         
-        # Extract non keywords and argument groups(a group contains argument keywords and their respective non keywords) from action groups
+        # Extract argument groups(a group contains argument keywords and their respective non keywords) and blind non keyword(non keywords with no argument keywords associated) from action groups
         try:
-            non_keywords, argument_groups = self._service.extract_nonkeywords_argument_groups(action, action_groups, probability_cutoff)
+            argument_groups, blind_non_keywords = self._service.extract_argument_groups(action, action_groups, probability_cutoff)
         except Exception as e:
-            raise RuntimeError(f"Error extracting argument keywords: {e}")
+            raise RuntimeError(f"Error extracting argument groups: {e}")
         
         arguments = [None] * self._service.get_arguments_count(action)
         
@@ -54,18 +56,45 @@ class Parser:
             try:
                 argument_index, non_keyword = self._service.predict_argument_nonkeyword_frequency(action, group, probability_cutoff)
                 if not argument_index:
-                    argument_index, non_keyword = self._service.predict_argument_nonkeyword_classification(action, group, 5)
+                    argument_index, non_keyword = self._service.predict_argument_nonkeyword_classification(action, group, 5, probability_cutoff)
                 if not argument_index:
                     return None
 
                 arguments[argument_index] = non_keyword
             except SyntaxError:
                 print("Warning: Valid values for some arguments may not have been found")
+                blind_non_keywords.extend(group[1])
             except Exception as e:
-                raise RuntimeError(f"Error extracting argument: {e}")
+                raise RuntimeError(f"Error predicting argument: {e}")
             
             argument_groups.pop()
+
+        classified_nonkeywords, classified_priority_nonkeywords = self._service.extract_classified_nonkeywords(blind_non_keywords)
+
+        try:
+            required_arguments, optional_arguments, unassigned_required_indices, unassigned_optional_indices = self._service.extract_argument_indices_information(action, arguments)
+        except Exception as e:
+            raise RuntimeError(f"Error extracting unassigned arguments: {e}")
+
+        try:
+            required_arguments_typemapping, optional_arguments_typemapping, unassigned_required_indices, unassigned_optional_indices = self._service.extract_arguments_typemapping(action, classified_nonkeywords, classified_priority_nonkeywords, unassigned_required_indices, unassigned_optional_indices)
+        except Exception as e:
+            raise RuntimeError(f"Error extracting arguments using type mapping: {e}")
         
+        required_arguments = heapq.merge(required_arguments, required_arguments_typemapping, key = lambda argument: argument[0])
+        optional_arguments = heapq.merge(optional_arguments, optional_arguments_typemapping, key = lambda argument: argument[0])
+        
+        if unassigned_required_indices:
+            required_arguments_questions = self._service.extract_arguments_questions(action, unassigned_required_indices, classified_nonkeywords, classified_priority_nonkeywords)
+            if not required_arguments_questions:
+                return None
+
+            required_arguments = heapq.merge(required_arguments, required_arguments_questions, key = lambda argument: argument[0])
+
+        for argument in heapq.merge(required_arguments, optional_arguments):
+            if argument:
+                arguments[argument[0]] = argument[1]
+
         return action, arguments
     
     def execute_action(self, action : str, arguments: list[str]) -> None:

@@ -66,15 +66,30 @@ class ParserWrapper:
 
         self._save_parser_model(self._commands, self._keyword_action_map, self._action_pipeline)
     
-    def predict_top_actions(self, keywords: list[str], max_possibilities: int) -> list[tuple]:
+    def predict_top_actions(self, keywords: list[str], max_possibilities: int, probability_cutoff: float) -> list[tuple]:
+        if probability_cutoff < 0 or probability_cutoff > 1:
+            raise ValueError(f"Probability cutoff must be in the interval [0, 1], value passed: {probability_cutoff}")
+
         probabilities: ndarray = self._action_pipeline.predict_proba([" ".join(keywords)])[0]
 
         classes = [(str(self._action_pipeline.classes_[idx]), float(probability)) for idx, probability in enumerate(probabilities)]
-        top_actions = sorted(classes, reverse=True, key = lambda x: x[1])[:min(len(probabilities), max_possibilities)]
+        top_actions_max = sorted(classes, reverse=True, key = lambda x: x[1])[:min(len(probabilities), max_possibilities)]
+        
+        top_actions = []
+        total_probability = 0
+        for action in top_actions_max:
+            top_actions.append(action)
+            total_probability += action[1]
+
+            if total_probability >= probability_cutoff:
+                break
 
         return top_actions
     
-    def predict_top_arguments_indices(self, action: str, keywords: list[str], max_possibilities: int) -> list[tuple]:
+    def predict_top_arguments_indices(self, action: str, keywords: list[str], max_possibilities: int, probability_cutoff: float) -> list[tuple]:
+        if probability_cutoff < 0 or probability_cutoff > 1:
+            raise ValueError(f"Probability cutoff must be in the interval [0, 1], value passed: {probability_cutoff}")
+
         if action not in self._commands:
             raise ValueError(f"Action '{action}' not found in commands")
         if "argument_pipeline" not in self._commands[action]:
@@ -84,7 +99,16 @@ class ParserWrapper:
         probabilities: ndarray = argument_pipeline.predict_proba([" ".join(keywords)])[0]
 
         classes = [(int(argument_pipeline.classes_[idx]), float(probability)) for idx, probability in enumerate(probabilities)]
-        top_arguments_indices = sorted(classes, reverse=True, key = lambda x: x[1])[:min(len(probabilities), max_possibilities)]
+        top_arguments_indices_max = sorted(classes, reverse=True, key = lambda x: x[1])[:min(len(probabilities), max_possibilities)]
+
+        top_arguments_indices = []
+        total_probability = 0
+        for argument in top_arguments_indices_max:
+            top_arguments_indices.append(argument)
+            total_probability += argument[1]
+
+            if total_probability >= probability_cutoff:
+                break
 
         return top_arguments_indices
     
@@ -148,7 +172,7 @@ class ParserWrapper:
 
         return self._commands[action]["keyword_argument_map"].get(keyword, set())
 
-    def get_required_arguments(self, action: str) -> tuple[list[int], Counter]:
+    def get_required_arguments(self, action: str) -> list[int]:
         if action not in self._commands:
             raise ValueError(f"Action '{action}' not found in commands")
         if "args" not in self._commands[action]:
@@ -156,15 +180,14 @@ class ParserWrapper:
         
         all_arguments: list[dict] = self._commands[action]["args"]
         
-        indices, needed = [], Counter()
+        indices = []
         for i in range(len(all_arguments)):
             if all_arguments[i]["required"]:
                 indices.append(i)
-                needed[all_arguments[i]["type"]] += 1
         
-        return indices, needed
+        return indices
     
-    def get_optional_arguments(self, action: str) -> tuple[list[int]]:
+    def get_optional_arguments(self, action: str) -> list[int]:
         if action not in self._commands:
             raise ValueError(f"Action '{action}' not found in commands")
         if "args" not in self._commands[action]:
