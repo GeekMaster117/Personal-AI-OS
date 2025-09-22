@@ -12,6 +12,9 @@ class ParserService:
             raise RuntimeError(f"Error initialising parser wrapper: {e}")
         
     def _handle_options(self, options: list[str], options_message = "Select an option:", select_message = "Enter an answer", key = lambda x: x) -> int:
+        # An extra option(skip request) is provided to user.
+        # If user enters skip request or any number outside given options, -1 is returned.
+
         print(options_message)
         for i, option in enumerate(options, start=1):
             print(f"{i}. {key(option)}")
@@ -24,6 +27,8 @@ class ParserService:
         return -1
     
     def _handle_argument_group_options(self, action: str, argument_indices: list[int], argument_group: tuple[list[str], set[tuple]], max_possibilities: int, train: bool) -> tuple[int, str] | tuple[None, None]:
+        # Either returns (argument keyword, non keyword) or (None, None)
+
         argument_keywords, non_keywords = argument_group
 
         try:
@@ -56,6 +61,9 @@ class ParserService:
         return options[answer]
 
     def _pop_nonkeyword(self, type: str, classified_nonkeywords: dict, classified_priority_nonkeywords: dict, throw_if_not_found: bool = False) -> str | None:
+        # Will try to pop from priority non keywords then non keywords.
+        # If type is 'any' will try to pop from every type available.
+
         non_keyword: str | None = None
 
         if type == "any":
@@ -84,6 +92,8 @@ class ParserService:
         return non_keyword
     
     def _pop_nonkeyword_question(self, type: str, description: str, classified_nonkeywords: dict, classified_priority_nonkeywords: dict) -> str | None:
+        # If multiple non keywords are available with the same type and priority, then will ask user for choice.
+
         options: list[str] = []
         borrowed_dict: dict | None = None
         borrowed_types: dict | None = None
@@ -126,6 +136,8 @@ class ParserService:
         return options[answer]
     
     def _extract_arguments_typemapping(self, action: str, argument_indices: list[int], classified_nonkeywords: dict, classified_priority_nonkeywords: dict, throw_if_not_found: bool = False) -> tuple[list[tuple], list[int]]:
+        # Tries to map non-any types first, then maps any type
+
         arguments = []
         any_type_indices = []
         for idx in argument_indices:
@@ -158,6 +170,9 @@ class ParserService:
         return arguments, unassigned_indices
     
     def _extract_argumentgroup_options(self, action: str, argument_indices: list[int], non_keywords: set[tuple[str, bool]], throw_if_exceed_count: int = float('inf')) -> list[tuple[int, str]]:
+        # Returns all possibilites between each argument index and non keyword.
+        # If possibilities exceed by 'throw_if_exceed_count' will throw an error.
+
         classified_non_keywords, classified_priority_non_keywords = self.extract_classified_nonkeywords(non_keywords)
 
         options = []
@@ -187,6 +202,8 @@ class ParserService:
         return options
         
     def canRunAction(self, action: str) -> bool:
+        # Checks if action has warning flag set to true, and asks user for permission to run.
+
         try:
             if self._wrapper.has_action_warning(action):
                 answer = input(f"Do you want to, {self._wrapper.get_action_description(action)} (Y/N): ").lower()
@@ -198,6 +215,9 @@ class ParserService:
             raise RuntimeError(f"Error checking if action can run: {e}")
 
     def predict_action_frequency(self, action_keywords: list[str], probability_cutoff: float = 0.85) -> str | None:
+        # Predicts action using frequency of action keywords.
+        # If confidence is less then probability cutoff, will return None.
+
         if probability_cutoff < 0 or probability_cutoff > 1:
             raise ValueError(f"Probability cutoff must be in the interval [0, 1], value passed: {probability_cutoff}")
 
@@ -220,6 +240,10 @@ class ParserService:
         return max_frequency_action[0] 
 
     def predict_action_classification(self, action_keywords: list[str], max_possibilities: int, probability_cutoff: float = 0.85) -> tuple[str | None, bool]:
+        # Predicts action with classification using action keywords.
+        # If confidence is less then probability cutoff, asks user for clarification.
+        # Trains classifier using user input.
+
         try:
             actions = self._wrapper.predict_top_actions(action_keywords, max_possibilities, probability_cutoff)
         except Exception as e:
@@ -245,6 +269,10 @@ class ParserService:
         return actions[answer][0], False
 
     def predict_argument_nonkeyword_frequency(self, action: str, argument_group: tuple[list[str], set[tuple]], max_possibilities: int, probability_cutoff: float = 0.85) -> tuple[int, str, bool] | tuple[None, None, bool]:
+        # Predicts argument and non keyword using frequency of argument group.
+        # If confidence of argument is less then probability cutoff, returns argument keyword and non keyword as None.
+        # Asks user for clarification is multiple non keywords are suitable candidates for the argument.
+
         if probability_cutoff < 0 or probability_cutoff > 1:
             raise ValueError(f"Probability cutoff must be in the interval [0, 1], value passed: {probability_cutoff}")
         
@@ -270,6 +298,10 @@ class ParserService:
         return argument_index, non_keyword, False
 
     def predict_argument_nonkeyword_classification(self, action: str, argument_group: tuple[list[str], set[tuple]], max_possibilites: int, probability_cutoff: float = 0.85) -> tuple[int, str, bool] | tuple[None, None, bool]:
+        # Predicts argument and non keyword with classification using argument group.
+        # If confidence of argument is less then probability cutoff, asks user for clarification and trains the classifier.
+        # Asks user for clarification is multiple non keywords are suitable candidates for the argument.
+
         if probability_cutoff < 0 or probability_cutoff > 1:
             raise ValueError(f"Probability cutoff must be in the interval [0, 1], value passed: {probability_cutoff}")
 
@@ -291,6 +323,9 @@ class ParserService:
         return argument_index, non_keyword, False
             
     def extract_tokens(self, query: str) -> list[tuple[str, bool]]:
+        # Extracts tokens from query.
+        # Marks each token if it is quoted or not.
+
         lexer = shlex.shlex(query)
         lexer.whitespace_split = True
 
@@ -307,7 +342,12 @@ class ParserService:
         
         return tokens
     
-    def extract_action_keywords_groups(self, tokens: list[tuple[str, bool]], probability_cutoff: float) -> tuple[list[str], list[list[tuple]]]:
+    def extract_action_groups(self, tokens: list[tuple[str, bool]], probability_cutoff: float) -> tuple[list[str], list[list[tuple]]]:
+        # Extracts a list of action keywords and, tokens divided by each action keyword encountered.
+        # If a token is quoted then is added to action group.
+        # If a token is an action keyword (predicted using fuzzy matching) is added to action keywords.
+        # If a token belongs is a stop word and is not quoted, it is discarded.
+
         action_keywords = []
 
         action_groups = []
@@ -344,6 +384,10 @@ class ParserService:
         return action_keywords, action_groups
     
     def extract_argument_groups(self, action: str, action_groups: list[list[tuple]], probability_cutoff: float) -> tuple[list[tuple], list[str]]:
+        # Extracts a list of argument keywords and their related non keywords, and a list of unrelated non keywords.
+        # If a token is an argument keyword (predicted using fuzzy matching) add it to argument keywords, else to non keywords.
+        # If a group has no argument keywords then add the non keywords to blind non keywords.
+
         argument_groups = []
         blind_non_keywords = []
 
@@ -374,6 +418,9 @@ class ParserService:
         return argument_groups, blind_non_keywords
 
     def extract_classified_nonkeywords(self, non_keywords: list[tuple[str, bool]]) -> tuple[dict, dict]:
+        # Classifies non keywords using types.
+        # If a non keyword is quoted gets added to classified priority non keywords, else to classified non keywords.
+
         classified_nonkeywords, classified_priority_nonkeywords = defaultdict(list), defaultdict(list)
         for token, quoted in non_keywords:
             type = "any"
@@ -390,6 +437,8 @@ class ParserService:
         return classified_nonkeywords, classified_priority_nonkeywords
     
     def extract_argument_indices_information(self, action: str, arguments: list[str]) -> tuple[list[tuple], list[tuple], list[int], list[int]]:
+        # Extracts information which required and optional arguments have been assigned, which required and optional arguments haven't been assigned.
+
         try:
             required_indices = self._wrapper.get_required_arguments(action)
             optional_indices = self._wrapper.get_optional_arguments(action)
@@ -416,12 +465,19 @@ class ParserService:
         return assigned_required_arguments, assigned_optional_arguments, unassigned_required_indices, unassigned_optional_indices
     
     def extract_arguments_typemapping(self, action: str, required_indices: list[int], optional_indices: list[int], classified_non_keywords: dict, classified_priority_non_keywords: dict) -> tuple[list[tuple], list[tuple], list[int], list[int]]:
+        # Extracts arguments using type mapping (assigning non keyword to arguments based on type)
+        # If non keywords are not sufficient for required arguments, will throw error.
+        # If non keywords are not available or not sufficient for optional arguments, will ignore.
+        # Returns assigned required and optional arguments, unassigned required and optional arguments.
+
         required_arguments, unassigned_required_indices = self._extract_arguments_typemapping(action, required_indices, classified_non_keywords, classified_priority_non_keywords, throw_if_not_found = True)
         optional_arguments, unassigned_optional_indices = self._extract_arguments_typemapping(action, optional_indices, classified_non_keywords, classified_priority_non_keywords)
 
         return required_arguments, optional_arguments, unassigned_required_indices, unassigned_optional_indices
     
     def extract_arguments_questions(self, action: str, argument_indices: list[int], classified_non_keywords: dict, classified_priority_non_keywords: dict) -> list[tuple] | None:
+        # Extracts arguments by asking questions to user.
+
         arguments = []
 
         for idx in argument_indices:
@@ -440,4 +496,6 @@ class ParserService:
         return arguments
 
     def get_arguments_count(self, action: str) -> int:
+        # Fetched no.of arguments available for an action.
+
         return self._wrapper.get_arguments_count(action)
