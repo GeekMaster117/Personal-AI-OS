@@ -267,6 +267,56 @@ class ParserService:
             print("Warning: Unable to train parser:", e)
         
         return actions[answer][0], False
+    
+    def predict_argument_frequency(self, action: str, argument_keywords: list[str], probability_cutoff: float = 0.85) -> int | None:
+        if probability_cutoff < 0 or probability_cutoff > 1:
+            raise ValueError(f"Probability cutoff must be in the interval [0, 1], value passed: {probability_cutoff}")
+        
+        argument_keywords_counter = Counter(argument_keywords)
+        
+        argument_counter = Counter()
+        for keyword, count in argument_keywords_counter.items():
+            try:
+                argument_indices = self._wrapper.get_argument_indices_for_keyword(action, keyword)
+            except Exception as e:
+                raise RuntimeError(f"Error fetching argument indices for keyword '{keyword}' and action '{action}': {e}")
+            
+            for idx in argument_indices:
+                argument_counter[idx] += count
+
+        max_frequency_argument = max(argument_counter.items(), key = lambda argument_counter: argument_counter[1])
+        if max_frequency_argument[1] / argument_counter.total() < probability_cutoff:
+            return None
+        
+        return max_frequency_argument[0]
+    
+    def predict_argument_classification(self, action: str, argument_keywords: list[str], max_possibilities: int, probability_cutoff: float = 0.85) -> tuple[str | None, bool]:
+        if probability_cutoff < 0 or probability_cutoff > 1:
+            raise ValueError(f"Probability cutoff must be in the interval [0, 1], value passed: {probability_cutoff}")
+        
+        try:
+            arguments = self._wrapper.predict_top_arguments_indices(action, argument_keywords, max_possibilities, probability_cutoff)
+        except Exception as e:
+            raise RuntimeError(f"Error extracting top arguments: {e}")
+        
+        if arguments[0][1] >= probability_cutoff:
+            return arguments[0][0], False
+        
+        try:
+            answer = self._handle_options(arguments, options_message = "What do you want to do?", key = lambda argument: self._wrapper.get_argument_description(action, argument[0]))
+            print("-----------------------------")
+        except Exception as e:
+            raise RuntimeError(f"Error fetching answer: {e}")
+        
+        if answer == -1:
+            return None, True
+
+        try:
+            self._wrapper.train_argument_pipeline(action, argument_keywords, arguments[answer][0])
+        except Exception as e:
+            print("Warning: Unable to train parser:", e)
+        
+        return arguments[answer][0], False
 
     def predict_argument_nonkeyword_frequency(self, action: str, argument_group: tuple[list[str], set[tuple]], max_possibilities: int, probability_cutoff: float = 0.85) -> tuple[int, str, bool] | tuple[None, None, bool]:
         # Predicts argument and non keyword using frequency of argument group.
@@ -392,7 +442,7 @@ class ParserService:
         blind_non_keywords = []
 
         for group in action_groups:
-            argument_keywords = []
+            argument_keyword: str | None = None
             non_keywords = set()
 
             for token, quoted in group:
@@ -401,17 +451,23 @@ class ParserService:
                     continue
                 
                 try:
-                    argument_keyword = self._wrapper.match_argument_keyword(action, token, probability_cutoff)
+                    keyword = self._wrapper.match_argument_keyword(action, token, probability_cutoff)
                 except Exception as e:
                     raise RuntimeError(f"Error matching argument keyword: {e}")
 
-                if argument_keyword:
-                    argument_keywords.append(argument_keyword)
+                if keyword:
+                    if argument_keyword:
+                        argument_groups.append(([argument_keyword], non_keywords))
+                    else:
+                        blind_non_keywords.extend(non_keywords)
+
+                    argument_keyword = keyword
+                    non_keywords.clear()
                 else:
                     non_keywords.add((token, quoted))
 
-            if argument_keywords:
-                argument_groups.append((argument_keywords, non_keywords))
+            if argument_keyword:
+                argument_groups.append(([argument_keyword], non_keywords))
             else:
                 blind_non_keywords.extend(non_keywords)
             
@@ -464,18 +520,18 @@ class ParserService:
 
         return assigned_required_arguments, assigned_optional_arguments, unassigned_required_indices, unassigned_optional_indices
     
-    def extract_arguments_typemapping(self, action: str, required_indices: list[int], optional_indices: list[int], classified_non_keywords: dict, classified_priority_non_keywords: dict) -> tuple[list[tuple], list[tuple], list[int], list[int]]:
+    def extract_arguments_typemapping(self, action: str, required_indices: list[int], optional_indices: list[int], classified_nonkeywords: dict, classified_priority_nonkeywords: dict) -> tuple[list[tuple], list[tuple], list[int], list[int]]:
         # Extracts arguments using type mapping (assigning non keyword to arguments based on type)
         # If non keywords are not sufficient for required arguments, will throw error.
         # If non keywords are not available or not sufficient for optional arguments, will ignore.
         # Returns assigned required and optional arguments, unassigned required and optional arguments.
 
-        required_arguments, unassigned_required_indices = self._extract_arguments_typemapping(action, required_indices, classified_non_keywords, classified_priority_non_keywords, throw_if_not_found = True)
-        optional_arguments, unassigned_optional_indices = self._extract_arguments_typemapping(action, optional_indices, classified_non_keywords, classified_priority_non_keywords)
+        required_arguments, unassigned_required_indices = self._extract_arguments_typemapping(action, required_indices, classified_nonkeywords, classified_priority_nonkeywords, throw_if_not_found = True)
+        optional_arguments, unassigned_optional_indices = self._extract_arguments_typemapping(action, optional_indices, classified_nonkeywords, classified_priority_nonkeywords)
 
         return required_arguments, optional_arguments, unassigned_required_indices, unassigned_optional_indices
     
-    def extract_arguments_questions(self, action: str, argument_indices: list[int], classified_non_keywords: dict, classified_priority_non_keywords: dict) -> list[tuple] | None:
+    def extract_arguments_questions(self, action: str, argument_indices: list[int], classified_nonkeywords: dict, classified_priority_nonkeywords: dict) -> list[tuple] | None:
         # Extracts arguments by asking questions to user.
 
         arguments = []
@@ -487,13 +543,22 @@ class ParserService:
             except Exception as e:
                 raise RuntimeError(f"Error fetching argument data: {e}")
             
-            non_keyword = self._pop_nonkeyword_question(type, description, classified_non_keywords, classified_priority_non_keywords)
+            non_keyword = self._pop_nonkeyword_question(type, description, classified_nonkeywords, classified_priority_nonkeywords)
             if not non_keyword:
                 return None
             
             arguments.append((idx, non_keyword))
 
         return arguments
+    
+    def extract_nonkeyword_typemapping(self, action: str, argument_index: int, non_keywords: list[tuple[str, bool]]) -> str | None:
+        classified_nonkeyword, classified_priority_nonkeywords = self.extract_classified_nonkeywords(non_keywords)
+
+        assigned_arguments, _ = self._extract_arguments_typemapping(action, [argument_index], classified_nonkeyword, classified_priority_nonkeywords)
+        
+        if assigned_arguments:
+            return assigned_arguments[0][1]
+        return None
 
     def get_arguments_count(self, action: str) -> int:
         # Fetched no.of arguments available for an action.

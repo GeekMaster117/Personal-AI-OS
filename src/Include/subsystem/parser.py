@@ -2,6 +2,8 @@ import heapq
 
 import subprocess
 
+from collections import defaultdict
+
 from Include.service.parser_service import ParserService
 
 class Parser:
@@ -40,6 +42,8 @@ class Parser:
         except Exception as e:
             raise RuntimeError(f"Error predicting action: {e}")
         
+        del action_keywords
+        
         # Extract argument groups and blind non keywords from action groups
         # Argument group: a group contains argument keywords and their respective non keywords
         # blind non keywords: non keywords with no argument keywords associated
@@ -47,35 +51,58 @@ class Parser:
             argument_groups, blind_non_keywords = self._service.extract_argument_groups(action, action_groups, probability_cutoff)
         except Exception as e:
             raise RuntimeError(f"Error extracting argument groups: {e}")
-        
-        arguments = [None] * self._service.get_arguments_count(action)
-        
-        while argument_groups:
-            group = argument_groups[-1]
 
+        del action_groups
+        
+        arguments: list[str | None] = [None] * self._service.get_arguments_count(action)
+
+        argument_ambigous_groups = []
+        predicted_argument_group = defaultdict(list)
+
+        argument_keywords, non_keywords = [], set()
+        for group in argument_groups:
+            try:
+                argument_index = self._service.predict_argument_frequency(action, group[0], probability_cutoff)
+            except Exception as e:
+                raise RuntimeError(f"Error predicting argument: {e}")
+
+            if argument_index is None:
+                argument_keywords.extend(group[0])
+                non_keywords.update(group[1])
+            else:
+                if argument_keywords:
+                    argument_ambigous_groups((argument_keywords, non_keywords))
+
+                predicted_argument_group[argument_index].extend(group[1])
+        if argument_keywords:
+            argument_ambigous_groups((argument_keywords, non_keywords))
+
+        del argument_groups, argument_keywords, non_keywords
+        
+        for group in argument_ambigous_groups:
             # Predict argument index using frequency method first, then classification method if frequency method fails. 
             # If skip = true, user has asked to skip request.
-            argument_index, non_keyword = None, None
             try:
-                argument_index, non_keyword, skip = self._service.predict_argument_nonkeyword_frequency(action, group, 5, probability_cutoff)
-                if skip:
-                    return None, []
-
+                argument_index = self._service.predict_argument_frequency(action, group[0], probability_cutoff)
                 if argument_index is None:
-                    argument_index, non_keyword, skip = self._service.predict_argument_nonkeyword_classification(action, group, 5, probability_cutoff)
+                    argument_index, skip = self._service.predict_argument_classification(action, group[0], 5, probability_cutoff)
                 if skip:
                     return None, []
 
-                arguments[argument_index] = non_keyword
-            except SyntaxError: 
-                # Syntax Error is thrown, when no valid non keywords are found for the argument
-                
-                print("Warning: Valid values for some arguments may not have been found")
-                blind_non_keywords.extend(group[1])
+                predicted_argument_group[argument_index].extend(group[1])
             except Exception as e:
                 raise RuntimeError(f"Error predicting argument: {e}")
             
-            argument_groups.pop()
+        del argument_ambigous_groups
+
+        for argument_index, non_keywords in predicted_argument_group.items():
+            non_keyword = self._service.extract_nonkeyword_typemapping(action, argument_index, non_keywords)
+            if non_keyword:
+                arguments[argument_index] = non_keyword
+            else:
+                blind_non_keywords.extend(non_keywords)
+
+        del predicted_argument_group
 
         # Classify non keywords with their type, priority non keywords are quoted tokens
         classified_nonkeywords, classified_priority_nonkeywords = self._service.extract_classified_nonkeywords(blind_non_keywords)
