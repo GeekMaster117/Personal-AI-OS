@@ -105,7 +105,7 @@ class ParserWrapper:
 
         return top_actions
     
-    def predict_top_arguments_indices(self, action: str, keywords: list[str], max_possibilities: int, probability_cutoff: float) -> list[tuple]:
+    def predict_argument_index(self, action: str, keywords: list[str], max_possibilities: int, probability_cutoff: float) -> list[tuple]:
         # Predicts top most possible arguments for the action and argument keywords.
         # Keeps adding arguments to list, until total probability exceeds probability cutoff.
         # Returns a list of arguments with their probabilities in descending order.
@@ -134,6 +134,28 @@ class ParserWrapper:
                 break
 
         return top_arguments_indices
+    
+    def predict_argument_index(self, action: str, keywords: list[str], probability_cutoff: float) -> int | None:
+        # Predicts top most possible arguments for the action and argument keywords.
+        # Keeps adding arguments to list, until total probability exceeds probability cutoff.
+        # Returns a list of arguments with their probabilities in descending order.
+
+        if probability_cutoff < 0 or probability_cutoff > 1:
+            raise ValueError(f"Probability cutoff must be in the interval [0, 1], value passed: {probability_cutoff}")
+
+        if action not in self._commands:
+            raise ValueError(f"Action '{action}' not found in commands")
+        if "argument_pipeline" not in self._commands[action]:
+            raise ValueError(f"Action '{action}' has no argument pipeline")
+        
+        argument_pipeline = self._commands[action]["argument_pipeline"]
+        probabilities: ndarray = argument_pipeline.predict_proba([" ".join(keywords)])[0]
+
+        argument_index = max([(int(argument_pipeline.classes_[idx]), float(probability)) for idx, probability in enumerate(probabilities)])
+
+        if argument_index[1] < probability_cutoff:
+            return None
+        return argument_index
     
     def match_action_keyword(self, token: str, probability_cutoff: float) -> str | None:
         # Matches token with action keywords using fuzzy matching.
