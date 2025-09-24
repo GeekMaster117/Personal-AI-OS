@@ -24,11 +24,18 @@ try:
 except Exception as e:
     raise RuntimeError(f"Error initialising pipeline: {e}")
 
+action_keys = {'keywords', 'args', 'description', 'warning'}
+argument_keys = {'keywords', 'type', 'required', 'description'}
+
 try:
     keyword_action_map: dict = defaultdict(set)
     action_keywords, actions = [], []
 
     for action, structure in commands.items():
+        for key in action_keys:
+            if key not in structure:
+                raise SyntaxError(f'{key} not found in action: {action}')
+
         for keyword in structure["keywords"]:
             keyword_action_map[keyword].add(action)
 
@@ -41,14 +48,18 @@ try:
 
         argument_keywords, arguments = [], []
 
-        for idx, arg in enumerate(structure["args"]):
-            for keyword in arg["keywords"]:
-                structure["keyword_argument_map"][keyword].add(idx)
+        for argument_index, argument_structure in enumerate(structure["args"]):
+            for key in argument_keys:
+                if key not in argument_structure:
+                    raise SyntaxError(f'{key} not found in action: {action}, argument index: {argument_index}')
 
-            argument_keywords.append(" ".join(arg["keywords"]))
-            arguments.append(idx)
+            for keyword in argument_structure["keywords"]:
+                structure["keyword_argument_map"][keyword].add(argument_index)
 
-            del arg["keywords"]
+            argument_keywords.append(" ".join(argument_structure["keywords"]))
+            arguments.append(argument_index)
+
+            del argument_structure["keywords"]
 
         if len(structure["args"]) <= 1:
             continue
