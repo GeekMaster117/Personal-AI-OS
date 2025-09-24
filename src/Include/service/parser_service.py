@@ -95,8 +95,8 @@ class ParserService:
         # If multiple non keywords are available with the same type and priority, then will ask user for choice.
 
         options: list[str] = []
-        borrowed_dict: dict | None = None
-        borrowed_types: dict | None = None
+        borrowed_dict: dict = dict()
+        borrowed_types: dict = dict()
 
         if type == "any":
             if not classified_nonkeywords and not classified_priority_nonkeywords:
@@ -108,7 +108,7 @@ class ParserService:
                 borrowed_dict = classified_nonkeywords
 
             for borrowed_type, non_keywords in borrowed_dict.items():
-                borrowed_types[borrowed_type] = (len(options) + 1, len(options) + len(non_keywords))
+                borrowed_types[borrowed_type] = (len(options), len(options) + len(non_keywords) - 1)
                 options.extend(non_keywords)
         else:
             if type not in classified_nonkeywords and type not in classified_priority_nonkeywords:
@@ -119,16 +119,25 @@ class ParserService:
             elif type in classified_nonkeywords:
                 borrowed_dict = classified_nonkeywords
 
-            borrowed_types[borrowed_type] = (1, borrowed_dict[type])
+            borrowed_types[type] = (0, len(borrowed_dict[type] - 1))
             options.extend(borrowed_dict[type])
 
+        if len(borrowed_types) == 1 and len(next(iter(borrowed_dict.values()))) == 1:
+            type, non_keywords = borrowed_dict.popitem()
+
+            return non_keywords[0]
+
         answer = self._handle_options(options, options_message = f"What is, {description}")
+        print("-----------------------------")
         if answer == -1:
             return None
-        
+
         for type, interval in borrowed_types.items():
             if interval[0] <= answer <= interval[1]:
                 borrowed_dict[type].remove(options[answer])
+                if not borrowed_dict[type]:
+                    del borrowed_dict[type]
+                
                 break
         else:
             raise RuntimeError("Could not parse the answer")
@@ -140,11 +149,11 @@ class ParserService:
 
         arguments = []
         any_type_indices = []
-        for idx in argument_indices:
+        for argument_index in argument_indices:
             try:
-                type = self._wrapper.get_argument_type(action, idx)
+                type = self._wrapper.get_argument_type(action, argument_index)
             except Exception as e:
-                raise RuntimeError(f"Error fetching argument type for action '{action}' and index '{idx}': {e}")
+                raise RuntimeError(f"Error fetching argument type for action '{action}' and index '{argument_index}': {e}")
 
             if type == "any":
                 any_type_indices.append(len(arguments))
@@ -153,21 +162,28 @@ class ParserService:
                 try:
                     non_keyword = self._pop_nonkeyword(type, classified_nonkeywords, classified_priority_nonkeywords, throw_if_not_found)
                 except Exception:
-                    raise SyntaxError(f"Could not find valid value for argument '{self._wrapper.get_argument_description(action, idx)}'")
+                    raise SyntaxError(f"Could not find valid value for argument '{self._wrapper.get_argument_description(action, argument_index)}'")
 
-                arguments.append((idx, non_keyword))
+                arguments.append((argument_index, non_keyword))
 
-        for idx in any_type_indices:
+        for argument_index in any_type_indices:
             try:
                 non_keyword = self._pop_nonkeyword(type, classified_nonkeywords, classified_priority_nonkeywords, throw_if_not_found)
             except Exception:
-                raise SyntaxError(f"Could not find valid value for argument '{idx}'")
+                raise SyntaxError(f"Could not find valid value for argument '{argument_index}'")
             
-            arguments[idx] = (idx, non_keyword)
+            if non_keyword:
+                arguments[argument_index] = (argument_index, non_keyword)
 
-        unassigned_indices = [i for i, arg in enumerate(arguments) if arg is None]
+        unassigned_indices = []
+        assigned_indicies = []
+        for argument_index, non_keyword in enumerate(arguments):
+            if non_keyword:
+                assigned_indicies.append((argument_index, non_keyword))
+            else:
+                unassigned_indices.append(argument_index)
 
-        return arguments, unassigned_indices
+        return assigned_indicies, unassigned_indices
     
     def _extract_argumentgroup_options(self, action: str, argument_indices: list[int], non_keywords: set[tuple[str, bool]], throw_if_exceed_count: int = float('inf')) -> list[tuple[int, str]]:
         # Returns all possibilites between each argument index and non keyword.
@@ -290,33 +306,16 @@ class ParserService:
         
         return max_frequency_argument[0]
     
-    def predict_argument_classification(self, action: str, argument_keywords: list[str], max_possibilities: int, probability_cutoff: float = 0.85) -> tuple[str | None, bool]:
+    def predict_argument_classification(self, action: str, argument_keywords: list[str], probability_cutoff: float = 0.85) -> tuple[str | None, bool]:
         if probability_cutoff < 0 or probability_cutoff > 1:
             raise ValueError(f"Probability cutoff must be in the interval [0, 1], value passed: {probability_cutoff}")
         
         try:
-            arguments = self._wrapper.predict_top_arguments_indices(action, argument_keywords, max_possibilities, probability_cutoff)
+            argument_index = self._wrapper.predict_argument_index(action, argument_keywords, probability_cutoff)
         except Exception as e:
             raise RuntimeError(f"Error extracting top arguments: {e}")
         
-        if arguments[0][1] >= probability_cutoff:
-            return arguments[0][0], False
-        
-        try:
-            answer = self._handle_options(arguments, options_message = "What do you want to do?", key = lambda argument: self._wrapper.get_argument_description(action, argument[0]))
-            print("-----------------------------")
-        except Exception as e:
-            raise RuntimeError(f"Error fetching answer: {e}")
-        
-        if answer == -1:
-            return None, True
-
-        try:
-            self._wrapper.train_argument_pipeline(action, argument_keywords, arguments[answer][0])
-        except Exception as e:
-            print("Warning: Unable to train parser:", e)
-        
-        return arguments[answer][0], False
+        return argument_index
 
     def predict_argument_nonkeyword_frequency(self, action: str, argument_group: tuple[list[str], set[tuple]], max_possibilities: int, probability_cutoff: float = 0.85) -> tuple[int, str, bool] | tuple[None, None, bool]:
         # Predicts argument and non keyword using frequency of argument group.
@@ -347,7 +346,7 @@ class ParserService:
             return None, None, True
         return argument_index, non_keyword, False
 
-    def predict_argument_nonkeyword_classification(self, action: str, argument_group: tuple[list[str], set[tuple]], max_possibilites: int, probability_cutoff: float = 0.85) -> tuple[int, str, bool] | tuple[None, None, bool]:
+    def predict_argument_nonkeyword_classification(self, action: str, argument_group: tuple[list[str], set[tuple]], max_possibilites: int, probability_cutoff: float = 0.85) -> tuple[int, str, bool] | tuple[int, None, bool] | tuple[None, None, bool]:
         # Predicts argument and non keyword with classification using argument group.
         # If confidence of argument is less then probability cutoff, asks user for clarification and trains the classifier.
         # Asks user for clarification is multiple non keywords are suitable candidates for the argument.
@@ -363,7 +362,7 @@ class ParserService:
             raise RuntimeError(f"Error extracting top arguments: {e}")
         
         if arguments[0][1] >= probability_cutoff:
-            argument_index, non_keyword = self._handle_argument_group_options(action, [arguments[0][0]], argument_group, max_possibilites, False)
+            return argument_index, None, False
         else:
             indices = [arg[0] for arg in arguments]
             argument_index, non_keyword = self._handle_argument_group_options(action, indices, argument_group, max_possibilites, True)
@@ -531,6 +530,11 @@ class ParserService:
 
         return required_arguments, optional_arguments, unassigned_required_indices, unassigned_optional_indices
     
+    def extract_arguments_questions(self, action: str, argument_indices: list[int], non_keywords: list[tuple[str, bool]]) -> list[tuple] | None:
+        classified_nonkeywords, classified_priority_nonkeywords = self.extract_classified_nonkeywords(non_keywords)
+
+        return self.extract_arguments_questions(action, argument_indices, classified_nonkeywords, classified_priority_nonkeywords)
+    
     def extract_arguments_questions(self, action: str, argument_indices: list[int], classified_nonkeywords: dict, classified_priority_nonkeywords: dict) -> list[tuple] | None:
         # Extracts arguments by asking questions to user.
 
@@ -539,7 +543,7 @@ class ParserService:
         for idx in argument_indices:
             try:
                 type = self._wrapper.get_argument_type(action, idx)
-                description = self._wrapper.get_action_description(action, idx)
+                description = self._wrapper.get_argument_description(action, idx)
             except Exception as e:
                 raise RuntimeError(f"Error fetching argument data: {e}")
             
