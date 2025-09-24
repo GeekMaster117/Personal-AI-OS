@@ -1,5 +1,3 @@
-import heapq
-
 import subprocess
 
 from collections import defaultdict
@@ -13,7 +11,27 @@ class Parser:
         except Exception as e:
             raise RuntimeError(f"Error initialising parser service: {e}")
         
-    def extract_action_arguments(self, query: str, probability_cutoff: float = 0.85) -> tuple[str, list[str]] | None:
+    def _merge_sort(self, list1: list, list2: list) -> list:
+        result = []
+        ptr1, ptr2 = 0, 0
+
+        while ptr1 < len(list1) and ptr2 < len(list2):
+            if list1[ptr1] < list2[ptr2]:
+                result.append(list1[ptr1])
+                ptr1 += 1
+            else:
+                result.append(list2[ptr2])
+                ptr2 += 1
+
+        # Add leftovers
+        if ptr1 < len(list1):
+            result.extend(list1[ptr1:])
+        if ptr2 < len(list2):
+            result.extend(list2[ptr2:])
+
+        return result
+        
+    def extract_action_arguments(self, query: str, probability_cutoff: float = 0.85) -> tuple[str, list[str]] | tuple[None, None]:
         # Extract tokens from query
         try:
             tokens: list[tuple[str | bool]] = self._service.extract_tokens(query)
@@ -37,8 +55,8 @@ class Parser:
 
             if not action:
                 action, skip = self._service.predict_action_classification(action_keywords, 5, probability_cutoff)
-            if skip:
-                return None, []
+                if skip:
+                    return None, None
         except Exception as e:
             raise RuntimeError(f"Error predicting action: {e}")
         
@@ -54,15 +72,21 @@ class Parser:
 
         del action_groups
         
+        # Argument list to which non keywords are mapped
         arguments: list[str | None] = [None] * self._service.get_arguments_count(action)
 
-        argument_ambigous_groups = []
-        predicted_argument_group = defaultdict(list)
+        # If any group can be predicted successfully, add the non keywords to predicted arguments
+        # Merge the rest of groups flushed by predicted groups.
+        merged_argument_groups = []
+        predicted_arguments = defaultdict(list)
 
         argument_keywords, non_keywords = [], set()
         for group in argument_groups:
+            # Predict argument index using frequency method first, then classification method if frequency method fails.
             try:
                 argument_index = self._service.predict_argument_frequency(action, group[0], probability_cutoff)
+                if argument_index is None:
+                    argument_index = self._service.predict_argument_classification(action, group[0], probability_cutoff)
             except Exception as e:
                 raise RuntimeError(f"Error predicting argument: {e}")
 
@@ -71,38 +95,45 @@ class Parser:
                 non_keywords.update(group[1])
             else:
                 if argument_keywords:
-                    argument_ambigous_groups((argument_keywords, non_keywords))
+                    merged_argument_groups((argument_keywords, non_keywords))
 
-                predicted_argument_group[argument_index].extend(group[1])
+                predicted_arguments[argument_index].extend(group[1])
         if argument_keywords:
-            argument_ambigous_groups((argument_keywords, non_keywords))
+            merged_argument_groups((argument_keywords, non_keywords))
 
         del argument_groups, argument_keywords, non_keywords
         
-        for group in argument_ambigous_groups:
-            # Predict argument index using frequency method first, then classification method if frequency method fails. 
-            # If skip = true, user has asked to skip request.
+        for group in merged_argument_groups:
+            # Predict argument index using frequency method first, then classification method if frequency method fails.
             try:
                 argument_index = self._service.predict_argument_frequency(action, group[0], probability_cutoff)
                 if argument_index is None:
-                    argument_index, skip = self._service.predict_argument_classification(action, group[0], 5, probability_cutoff)
-                if skip:
-                    return None, []
-
-                predicted_argument_group[argument_index].extend(group[1])
+                    argument_index, non_keyword, skip = self._service.predict_argument_nonkeyword_classification(action, group, 5, probability_cutoff)
+                    if skip:
+                        return None, None
+                    
+                    if non_keyword:
+                        arguments[argument_index] = non_keyword
+                    else:
+                        predicted_arguments[argument_index].extend(group[1])
             except Exception as e:
                 raise RuntimeError(f"Error predicting argument: {e}")
-            
-        del argument_ambigous_groups
+        
+        del merged_argument_groups
 
-        for argument_index, non_keywords in predicted_argument_group.items():
+        for argument_index, non_keywords in predicted_arguments.items():
             non_keyword = self._service.extract_nonkeyword_typemapping(action, argument_index, non_keywords)
-            if non_keyword:
-                arguments[argument_index] = non_keyword
-            else:
-                blind_non_keywords.extend(non_keywords)
 
-        del predicted_argument_group
+            if not non_keyword:
+                argument = self._service.extract_arguments_questions(action, [argument_index], non_keywords)
+                if not argument:
+                    return None, None
+                
+                arguments[argument_index] = argument[0][1]
+            else:
+                arguments[argument_index] = non_keyword
+
+        del predicted_arguments
 
         # Classify non keywords with their type, priority non keywords are quoted tokens
         classified_nonkeywords, classified_priority_nonkeywords = self._service.extract_classified_nonkeywords(blind_non_keywords)
@@ -121,8 +152,8 @@ class Parser:
             except Exception as e:
                 raise RuntimeError(f"Error extracting arguments using type mapping: {e}")
 
-            required_arguments = heapq.merge(required_arguments, required_arguments_typemapping, key = lambda argument: argument[0])
-            optional_arguments = heapq.merge(optional_arguments, optional_arguments_typemapping, key = lambda argument: argument[0])
+            required_arguments = self._merge_sort(required_arguments, required_arguments_typemapping)
+            optional_arguments = self._merge_sort(optional_arguments, optional_arguments_typemapping)
         
         # If required arguments haven't been assigned, assign by asking questions to user. 
         # If required arguments questions is None, then user has asked to skip request. 
@@ -130,12 +161,12 @@ class Parser:
         if unassigned_required_indices:
             required_arguments_questions = self._service.extract_arguments_questions(action, unassigned_required_indices, classified_nonkeywords, classified_priority_nonkeywords)
             if required_arguments_questions is None:
-                return None
+                return None, None
 
-            required_arguments = heapq.merge(required_arguments, required_arguments_questions, key = lambda argument: argument[0])
+            required_arguments = self._merge_sort(required_arguments, required_arguments_questions)
 
         # Combine required arguments and optional arguments.
-        for argument in heapq.merge(required_arguments, optional_arguments):
+        for argument in self._merge_sort(required_arguments, optional_arguments):
             if argument:
                 arguments[argument[0]] = argument[1]
 
