@@ -160,26 +160,26 @@ class ParserService:
                 arguments.append(None)
             else:
                 try:
-                    non_keyword = self._pop_nonkeyword(type, classified_nonkeywords, classified_priority_nonkeywords, throw_if_not_found)
+                    argument = self._pop_nonkeyword(type, classified_nonkeywords, classified_priority_nonkeywords, throw_if_not_found)
                 except Exception:
                     raise SyntaxError(f"Could not find valid value for argument '{self._wrapper.get_argument_description(action, argument_index)}'")
 
-                arguments.append((argument_index, non_keyword))
+                arguments.append((argument_index, argument))
 
         for argument_index in any_type_indices:
             try:
-                non_keyword = self._pop_nonkeyword(type, classified_nonkeywords, classified_priority_nonkeywords, throw_if_not_found)
+                argument = self._pop_nonkeyword(type, classified_nonkeywords, classified_priority_nonkeywords, throw_if_not_found)
             except Exception:
                 raise SyntaxError(f"Could not find valid value for argument '{argument_index}'")
             
-            if non_keyword:
-                arguments[argument_index] = (argument_index, non_keyword)
+            if argument:
+                arguments[argument_index] = (argument_index, argument)
 
         unassigned_indices = []
         assigned_indicies = []
-        for argument_index, non_keyword in enumerate(arguments):
-            if non_keyword:
-                assigned_indicies.append((argument_index, non_keyword))
+        for argument_index, argument in enumerate(arguments):
+            if argument:
+                assigned_indicies.append(argument)
             else:
                 unassigned_indices.append(argument_index)
 
@@ -418,14 +418,8 @@ class ParserService:
                 if non_keywords:
                     action_groups.append(non_keywords)
                     non_keywords = []
-
-                continue
-            
-            try:
-                if not self._wrapper.is_stop_word(token, probability_cutoff):
-                    non_keywords.append((token, quoted))
-            except Exception as e:
-                raise RuntimeError(f"Error checking stop word: {e}")
+            else:
+                non_keywords.append((token, quoted))
 
         if non_keywords:
             action_groups.append(non_keywords)
@@ -461,9 +455,15 @@ class ParserService:
                         blind_non_keywords.extend(non_keywords)
 
                     argument_keyword = keyword
-                    non_keywords.clear()
-                else:
-                    non_keywords.add((token, quoted))
+                    non_keywords = set()
+
+                    continue
+
+                try:
+                    if not self._wrapper.is_stop_word(token, probability_cutoff):
+                        non_keywords.add((token, quoted))
+                except Exception as e:
+                    raise RuntimeError(f"Error checking stop word: {e}")
 
             if argument_keyword:
                 argument_groups.append(([argument_keyword], non_keywords))
