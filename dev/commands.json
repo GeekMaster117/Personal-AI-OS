@@ -1,29 +1,48 @@
 {
     "mkdir": {
-        "keywords": ["create", "make", "new", "folder", "directory", "mk", "mkdir"],
+        "keywords": ["create", "make", "new", "folder", "directory", "dir", "mk", "mkdir"],
         "args": [
             {
-                "keywords": ["called", "title", "titled", "label", "labeled"],
+                "keywords": ["called", "named", "as", "known", "alias"],
                 "type": "any",
                 "required": true,
-                "description": "Name of the folder"
+                "description": "Folder name"
             }
         ],
         "description": "Create a folder",
         "warning": false
     },
     "rmdir": {
-        "keywords": ["delete", "remove", "folder", "directory", "rm", "rmdir"],
+        "keywords": ["delete", "remove", "folder", "directory", "dir", "rm", "rmdir"],
         "args": [
             {
-                "keywords": ["called", "title", "titled", "label", "labeled"],
+                "keywords": ["called", "named", "as", "known", "alias"],
                 "type": "any",
                 "required": true,
-                "description": "Name of the folder"
+                "description": "Folder name"
             }
         ],
         "description": "Delete a folder",
         "warning": true
+    },
+    "ren": {
+        "keywords": ["rename", "change", "move", "folder", "directory", "dir", "ren"],
+        "args": [
+            {
+                "keywords": ["old", "from", "current", "existing", "original"],
+                "type": "any",
+                "required": true,
+                "description": "Old file/folder name"
+            },
+            {
+                "keywords": ["new", "to", "as", "into", "after"],
+                "type": "any",
+                "required": true,
+                "description": "New file/folder name"
+            }
+        ],
+        "description": "Rename a file/folder",
+        "warning": false
     },
     "exit": {
         "keywords": ["exit", "quit", "close", "shutdown", "stop", "bye"],
