@@ -27,6 +27,7 @@ class ParserService:
         return -1
     
     def _handle_argument_group_options(self, action: str, argument_indices: list[int], argument_group: tuple[list[str], set[tuple]], max_possibilities: int, train: bool) -> tuple[int, str] | tuple[None, None]:
+        # Generates all possibilities of arguments and non keywords and asks user for correct option.
         # Either returns (argument keyword, non keyword) or (None, None)
 
         argument_keywords, non_keywords = argument_group
@@ -285,6 +286,9 @@ class ParserService:
         return actions[answer][0], False
     
     def predict_argument_frequency(self, action: str, argument_keywords: list[str], probability_cutoff: float = 0.85) -> int | None:
+        # Predicts argument using frequency of argument keywords.
+        # If confidence is less then probability cutoff, will return None.
+
         if probability_cutoff < 0 or probability_cutoff > 1:
             raise ValueError(f"Probability cutoff must be in the interval [0, 1], value passed: {probability_cutoff}")
         
@@ -306,7 +310,10 @@ class ParserService:
         
         return max_frequency_argument[0]
     
-    def predict_argument_classification(self, action: str, argument_keywords: list[str], probability_cutoff: float = 0.85) -> tuple[str | None, bool]:
+    def predict_argument_classification(self, action: str, argument_keywords: list[str], probability_cutoff: float = 0.85) -> str | None:
+        # Predicts argument with classification using argument keywords.
+        # If confidence is less then probability cutoff, returns None.
+
         if probability_cutoff < 0 or probability_cutoff > 1:
             raise ValueError(f"Probability cutoff must be in the interval [0, 1], value passed: {probability_cutoff}")
         
@@ -316,35 +323,6 @@ class ParserService:
             raise RuntimeError(f"Error extracting top arguments: {e}")
         
         return argument_index
-
-    def predict_argument_nonkeyword_frequency(self, action: str, argument_group: tuple[list[str], set[tuple]], max_possibilities: int, probability_cutoff: float = 0.85) -> tuple[int, str, bool] | tuple[None, None, bool]:
-        # Predicts argument and non keyword using frequency of argument group.
-        # If confidence of argument is less then probability cutoff, returns argument keyword and non keyword as None.
-        # Asks user for clarification is multiple non keywords are suitable candidates for the argument.
-
-        if probability_cutoff < 0 or probability_cutoff > 1:
-            raise ValueError(f"Probability cutoff must be in the interval [0, 1], value passed: {probability_cutoff}")
-        
-        argument_keywords_counter = Counter(argument_group[0])
-
-        argument_counter = Counter()
-        for keyword, count in argument_keywords_counter.items():
-            try:
-                argument_indices = self._wrapper.get_argument_indices_for_keyword(action, keyword)
-            except Exception as e:
-                raise RuntimeError(f"Error fetching argument indices for keyword '{keyword}' and action '{action}': {e}")
-            
-            for idx in argument_indices:
-                argument_counter[idx] += count
-
-        max_frequency_argument = max(argument_counter.items(), key = lambda argument_counter: argument_counter[1])
-        if max_frequency_argument[1] / argument_counter.total() < probability_cutoff:
-            return None, None, False
-        
-        argument_index, non_keyword = self._handle_argument_group_options(action, [max_frequency_argument[0]], argument_group, max_possibilities, False)
-        if argument_index is None:
-            return None, None, True
-        return argument_index, non_keyword, False
 
     def predict_argument_nonkeyword_classification(self, action: str, argument_group: tuple[list[str], set[tuple]], max_possibilites: int, probability_cutoff: float = 0.85) -> tuple[int, str, bool] | tuple[int, None, bool] | tuple[None, None, bool]:
         # Predicts argument and non keyword with classification using argument group.
@@ -408,7 +386,7 @@ class ParserService:
                 continue
             
             try:
-                action_keyword = self._wrapper.match_action_keyword(token, probability_cutoff)
+                action_keyword = self._wrapper.match_action_keyword(token.lower(), probability_cutoff)
             except Exception as e:
                 raise RuntimeError(f"Error matching action keyword: {e}")
 
@@ -444,7 +422,7 @@ class ParserService:
                     continue
                 
                 try:
-                    keyword = self._wrapper.match_argument_keyword(action, token, probability_cutoff)
+                    keyword = self._wrapper.match_argument_keyword(action, token.lower(), probability_cutoff)
                 except Exception as e:
                     raise RuntimeError(f"Error matching argument keyword: {e}")
 
@@ -460,7 +438,7 @@ class ParserService:
                     continue
 
                 try:
-                    if not self._wrapper.is_stop_word(token, probability_cutoff):
+                    if not self._wrapper.is_stop_word(token.lower(), probability_cutoff):
                         non_keywords.add((token, quoted))
                 except Exception as e:
                     raise RuntimeError(f"Error checking stop word: {e}")
@@ -530,12 +508,12 @@ class ParserService:
 
         return required_arguments, optional_arguments, unassigned_required_indices, unassigned_optional_indices
     
-    def extract_arguments_questions(self, action: str, argument_indices: list[int], non_keywords: list[tuple[str, bool]]) -> list[tuple] | None:
+    def extract_arguments_questions_nonkeywords(self, action: str, argument_indices: list[int], non_keywords: list[tuple[str, bool]]) -> list[tuple] | None:
         classified_nonkeywords, classified_priority_nonkeywords = self.extract_classified_nonkeywords(non_keywords)
 
-        return self.extract_arguments_questions(action, argument_indices, classified_nonkeywords, classified_priority_nonkeywords)
+        return self.extract_arguments_questions_classified_nonkeywords(action, argument_indices, classified_nonkeywords, classified_priority_nonkeywords)
     
-    def extract_arguments_questions(self, action: str, argument_indices: list[int], classified_nonkeywords: dict, classified_priority_nonkeywords: dict) -> list[tuple] | None:
+    def extract_arguments_questions_classified_nonkeywords(self, action: str, argument_indices: list[int], classified_nonkeywords: dict, classified_priority_nonkeywords: dict) -> list[tuple] | None:
         # Extracts arguments by asking questions to user.
 
         arguments = []

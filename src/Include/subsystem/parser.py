@@ -80,9 +80,9 @@ class Parser:
         merged_argument_groups = []
         predicted_arguments = defaultdict(list)
 
+        # Predict argument index using frequency method first, then classification method if frequency method fails.
         argument_keywords, non_keywords = [], set()
         for group in argument_groups:
-            # Predict argument index using frequency method first, then classification method if frequency method fails.
             try:
                 argument_index = self._service.predict_argument_frequency(action, group[0], probability_cutoff)
                 if argument_index is None:
@@ -103,8 +103,10 @@ class Parser:
 
         del argument_groups, argument_keywords, non_keywords
         
+        # If any argument can be predicted successfully, add the non keywords to predicted arguments
+        # Else asks user for correct possible option. Options - (argument, non keyword)
+        # Predict argument index using frequency method first, then classification method if frequency method fails.
         for group in merged_argument_groups:
-            # Predict argument index using frequency method first, then classification method if frequency method fails.
             try:
                 argument_index = self._service.predict_argument_frequency(action, group[0], probability_cutoff)
                 if argument_index is None:
@@ -121,11 +123,13 @@ class Parser:
         
         del merged_argument_groups
 
+        # Tries to predict non keyword using type mapping.
+        # Else asks user for correct non keyword.
         for argument_index, non_keywords in predicted_arguments.items():
             non_keyword = self._service.extract_nonkeyword_typemapping(action, argument_index, non_keywords)
 
             if not non_keyword:
-                argument = self._service.extract_arguments_questions(action, [argument_index], non_keywords)
+                argument = self._service.extract_arguments_questions_nonkeywords(action, [argument_index], non_keywords)
                 if not argument:
                     return None, None
                 
@@ -159,7 +163,7 @@ class Parser:
         # If required arguments questions is None, then user has asked to skip request. 
         # Merge newly mapped arguments with existing arguments
         if unassigned_required_indices:
-            required_arguments_questions = self._service.extract_arguments_questions(action, unassigned_required_indices, classified_nonkeywords, classified_priority_nonkeywords)
+            required_arguments_questions = self._service.extract_arguments_questions_classified_nonkeywords(action, unassigned_required_indices, classified_nonkeywords, classified_priority_nonkeywords)
             if required_arguments_questions is None:
                 return None, None
 

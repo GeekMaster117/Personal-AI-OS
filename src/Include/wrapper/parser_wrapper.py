@@ -105,10 +105,9 @@ class ParserWrapper:
 
         return top_actions
     
-    def predict_argument_index(self, action: str, keywords: list[str], max_possibilities: int, probability_cutoff: float) -> list[tuple]:
-        # Predicts top most possible arguments for the action and argument keywords.
-        # Keeps adding arguments to list, until total probability exceeds probability cutoff.
-        # Returns a list of arguments with their probabilities in descending order.
+    def predict_argument_index(self, action: str, argument_keywords: list[str], probability_cutoff: float) -> int | None:
+        # Predicts argument using argument keywords.
+        # If confidence is less then probability cutoff, returns None.
 
         if probability_cutoff < 0 or probability_cutoff > 1:
             raise ValueError(f"Probability cutoff must be in the interval [0, 1], value passed: {probability_cutoff}")
@@ -119,37 +118,7 @@ class ParserWrapper:
             raise ValueError(f"Action '{action}' has no argument pipeline")
         
         argument_pipeline = self._commands[action]["argument_pipeline"]
-        probabilities: ndarray = argument_pipeline.predict_proba([" ".join(keywords)])[0]
-
-        classes = [(int(argument_pipeline.classes_[idx]), float(probability)) for idx, probability in enumerate(probabilities)]
-        top_arguments_indices_max = sorted(classes, reverse=True, key = lambda x: x[1])[:min(len(probabilities), max_possibilities)]
-
-        top_arguments_indices = []
-        total_probability = 0
-        for argument in top_arguments_indices_max:
-            top_arguments_indices.append(argument)
-            total_probability += argument[1]
-
-            if total_probability >= probability_cutoff:
-                break
-
-        return top_arguments_indices
-    
-    def predict_argument_index(self, action: str, keywords: list[str], probability_cutoff: float) -> int | None:
-        # Predicts top most possible arguments for the action and argument keywords.
-        # Keeps adding arguments to list, until total probability exceeds probability cutoff.
-        # Returns a list of arguments with their probabilities in descending order.
-
-        if probability_cutoff < 0 or probability_cutoff > 1:
-            raise ValueError(f"Probability cutoff must be in the interval [0, 1], value passed: {probability_cutoff}")
-
-        if action not in self._commands:
-            raise ValueError(f"Action '{action}' not found in commands")
-        if "argument_pipeline" not in self._commands[action]:
-            raise ValueError(f"Action '{action}' has no argument pipeline")
-        
-        argument_pipeline = self._commands[action]["argument_pipeline"]
-        probabilities: ndarray = argument_pipeline.predict_proba([" ".join(keywords)])[0]
+        probabilities: ndarray = argument_pipeline.predict_proba([" ".join(argument_keywords)])[0]
 
         argument_index = max([(int(argument_pipeline.classes_[idx]), float(probability)) for idx, probability in enumerate(probabilities)])
 
