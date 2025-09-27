@@ -5,6 +5,7 @@
             {
                 "keywords": ["called", "named", "as", "known", "alias"],
                 "type": "any",
+                "format": "",
                 "required": true,
                 "description": "Folder name"
             }
@@ -18,6 +19,7 @@
             {
                 "keywords": ["called", "named", "as", "known", "alias"],
                 "type": "any",
+                "format": "",
                 "required": true,
                 "description": "Folder name"
             }
@@ -31,12 +33,14 @@
             {
                 "keywords": ["old", "from", "current", "existing", "original"],
                 "type": "any",
+                "format": "",
                 "required": true,
                 "description": "Old file/folder name"
             },
             {
                 "keywords": ["new", "to", "as", "into", "after"],
                 "type": "any",
+                "format": "",
                 "required": true,
                 "description": "New file/folder name"
             }
