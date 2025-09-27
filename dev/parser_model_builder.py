@@ -25,7 +25,7 @@ except Exception as e:
     raise RuntimeError(f"Error initialising pipeline: {e}")
 
 action_keys = {'keywords', 'args', 'description', 'warning'}
-argument_keys = {'keywords', 'type', 'required', 'description'}
+argument_keys = {'keywords', 'type', 'format', 'required', 'description'}
 
 try:
     keyword_action_map: dict = defaultdict(set)
