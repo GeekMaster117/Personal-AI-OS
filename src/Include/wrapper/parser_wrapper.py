@@ -219,6 +219,9 @@ class ParserWrapper:
         
         indices = []
         for i in range(len(all_arguments)):
+            if "required" not in all_arguments[i]:
+                raise ValueError(f"Argument: '{i}' for Action '{action}' has no required")
+            
             if all_arguments[i]["required"]:
                 indices.append(i)
         
@@ -230,12 +233,15 @@ class ParserWrapper:
         if action not in self._commands:
             raise ValueError(f"Action '{action}' not found in commands")
         if "args" not in self._commands[action]:
-            return []
+            raise ValueError(f"Action '{action}' has no arguments")
         
         all_arguments: list[dict] = self._commands[action]["args"]
         
         indices = []
         for i in range(len(all_arguments)):
+            if "required" not in all_arguments[i]:
+                raise ValueError(f"Argument: '{i}' for Action '{action}' has no required")
+            
             if not all_arguments[i]["required"]:
                 indices.append(i)
         
@@ -244,32 +250,32 @@ class ParserWrapper:
     def get_argument_type(self, action: str, idx: int) -> str:
         # Fetches type of an argument
 
-        if action not in self._commands:
-            raise ValueError(f"Action '{action}' not found in commands")
-        if "args" not in self._commands[action]:
-            raise ValueError(f"Action '{action}' has no arguments")
-        
-        all_arguments: list[dict] = self._commands[action]["args"]
-        
-        if idx < 0 or idx >= len(all_arguments):
-            raise IndexError(f"Argument index {idx} out of range for action '{action}'")
+        if idx < 0 or idx >= self.get_arguments_count(action):
+            raise ValueError(f"Index out of bounds, index given: {idx} arguments available: {self.get_arguments_count()}")
+        if "type" not in self._commands[action]["args"][idx]:
+            raise ValueError(f"Argument: '{idx}' for Action '{action}' has no type")
 
-        return all_arguments[idx]["type"]
+        return self._commands[action]["args"][idx]["type"]
+    
+    def get_argument_format(self, action: str, idx: int) -> str:
+        # Fetches format of an argument.
+
+        if idx < 0 or idx >= self.get_arguments_count(action):
+            raise ValueError(f"Index out of bounds, index given: {idx} arguments available: {self.get_arguments_count()}")
+        if "format" not in self._commands[action]["args"][idx]:
+            raise ValueError(f"Argument: '{idx}' for Action '{action}' has no format")
+        
+        return self._commands[action]["args"][idx]["format"]
     
     def get_argument_description(self, action: str, idx: int) -> str:
         # Fetches type of an argument
 
-        if action not in self._commands:
-            raise ValueError(f"Action '{action}' not found in commands")
-        if "args" not in self._commands[action]:
-            raise ValueError(f"Action '{action}' has no arguments")
+        if idx < 0 or idx >= self.get_arguments_count(action):
+            raise ValueError(f"Index out of bounds, index given: {idx} arguments available: {self.get_arguments_count()}")
+        if "description" not in self._commands[action]["args"][idx]:
+            raise ValueError(f"Argument: '{idx}' for Action '{action}' has no description")
         
-        all_arguments: list[dict] = self._commands[action]["args"]
-        
-        if idx < 0 or idx >= len(all_arguments):
-            raise IndexError(f"Argument index {idx} out of range for action '{action}'")
-
-        return all_arguments[idx]["description"]
+        return self._commands[action]["args"][idx]["description"]
     
     def get_arguments_count(self, action: str) -> int:
         # Fetched no.of arguments available for an action.
@@ -277,6 +283,6 @@ class ParserWrapper:
         if action not in self._commands:
             raise ValueError(f"Action '{action}' not found in commands")
         if "args" not in self._commands[action]:
-            return 0
+            raise ValueError(f"Action '{action}' has no arguments")
         
         return len(self._commands[action]["args"])
