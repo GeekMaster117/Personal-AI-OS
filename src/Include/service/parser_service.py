@@ -92,7 +92,7 @@ class ParserService:
 
         return non_keyword
     
-    def _pop_nonkeyword_question(self, type: str, description: str, classified_nonkeywords: dict, classified_priority_nonkeywords: dict) -> str | None:
+    def _pop_nonkeyword_question(self, type: str, description: str, classified_nonkeywords: dict, classified_priority_nonkeywords: dict, throw_if_not_found: bool = False) -> tuple[str | None, bool]:
         # If multiple non keywords are available with the same type and priority, then will ask user for choice.
 
         options: list[str] = []
@@ -101,7 +101,10 @@ class ParserService:
 
         if type == "any":
             if not classified_nonkeywords and not classified_priority_nonkeywords:
-                raise SyntaxError(f"Could not find '{description}'")
+                if throw_if_not_found:
+                    raise SyntaxError(f"Could not find '{description}'")
+                else:
+                    return None, False
 
             if classified_priority_nonkeywords:
                 borrowed_dict = classified_priority_nonkeywords
@@ -113,7 +116,10 @@ class ParserService:
                 options.extend(non_keywords)
         else:
             if type not in classified_nonkeywords and type not in classified_priority_nonkeywords:
-                raise SyntaxError(f"Could not find '{description}'")
+                if throw_if_not_found:
+                    raise SyntaxError(f"Could not find '{description}'")
+                else:
+                    return None, False
 
             if type in classified_priority_nonkeywords:
                 borrowed_dict = classified_priority_nonkeywords
@@ -131,7 +137,7 @@ class ParserService:
         answer = self._handle_options(options, options_message = f"What is, {description}")
         print("-----------------------------")
         if answer == -1:
-            return None
+            return None, True
 
         for type, interval in borrowed_types.items():
             if interval[0] <= answer <= interval[1]:
@@ -143,7 +149,7 @@ class ParserService:
         else:
             raise RuntimeError("Could not parse the answer")
 
-        return options[answer]
+        return options[answer], False
     
     def _extract_arguments_typemapping(self, action: str, argument_indices: list[int], classified_nonkeywords: dict, classified_priority_nonkeywords: dict, throw_if_not_found: bool = False) -> tuple[list[tuple], list[int]]:
         # Tries to map non-any types first, then maps any type
@@ -513,7 +519,7 @@ class ParserService:
 
         return self.extract_arguments_questions_classified_nonkeywords(action, argument_indices, classified_nonkeywords, classified_priority_nonkeywords)
     
-    def extract_arguments_questions_classified_nonkeywords(self, action: str, argument_indices: list[int], classified_nonkeywords: dict, classified_priority_nonkeywords: dict) -> list[tuple] | None:
+    def extract_arguments_questions_classified_nonkeywords(self, action: str, argument_indices: list[int], classified_nonkeywords: dict, classified_priority_nonkeywords: dict, throw_if_not_found: bool = False) -> list[tuple] | None:
         # Extracts arguments by asking questions to user.
 
         arguments = []
@@ -525,8 +531,8 @@ class ParserService:
             except Exception as e:
                 raise RuntimeError(f"Error fetching argument data: {e}")
             
-            non_keyword = self._pop_nonkeyword_question(type, description, classified_nonkeywords, classified_priority_nonkeywords)
-            if not non_keyword:
+            non_keyword, skip = self._pop_nonkeyword_question(type, description, classified_nonkeywords, classified_priority_nonkeywords, throw_if_not_found)
+            if skip:
                 return None
             
             arguments.append((idx, non_keyword))
@@ -541,6 +547,11 @@ class ParserService:
         if assigned_arguments:
             return assigned_arguments[0][1]
         return None
+    
+    def get_argument_format(self, action: str, idx: int) -> str:
+        # Fetches format of an argument.
+
+        return self._wrapper.get_argument_format(action, idx)
 
     def get_arguments_count(self, action: str) -> int:
         # Fetched no.of arguments available for an action.
