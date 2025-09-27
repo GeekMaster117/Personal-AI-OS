@@ -48,6 +48,27 @@
         "description": "Rename a file/folder",
         "warning": false
     },
+    "ping": {
+        "keywords": ["ping", "check", "reach", "connect", "contact", "access", "test"],
+        "args": [
+            {
+                "keywords": ["host", "address", "to", "target", "server", "ip", "url"],
+                "type": "any",
+                "format": "",
+                "required": true,
+                "description": "URL"
+            },
+            {
+                "keywords": ["repeat", "try", "send", "call", "loop"],
+                "type": "int",
+                "format": "-n ",
+                "required": false,
+                "description": "No.of times to ping"
+            }
+        ],
+        "description": "Ping a URL",
+        "warning": false
+    },
     "exit": {
         "keywords": ["exit", "quit", "close", "shutdown", "stop", "bye"],
         "args": [],
