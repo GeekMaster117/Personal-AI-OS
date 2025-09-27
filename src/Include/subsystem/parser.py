@@ -163,7 +163,7 @@ class Parser:
         # If required arguments questions is None, then user has asked to skip request. 
         # Merge newly mapped arguments with existing arguments
         if unassigned_required_indices:
-            required_arguments_questions = self._service.extract_arguments_questions_classified_nonkeywords(action, unassigned_required_indices, classified_nonkeywords, classified_priority_nonkeywords)
+            required_arguments_questions = self._service.extract_arguments_questions_classified_nonkeywords(action, unassigned_required_indices, classified_nonkeywords, classified_priority_nonkeywords, True)
             if required_arguments_questions is None:
                 return None, None
 
@@ -180,6 +180,12 @@ class Parser:
         # Check if action can be executed
         if not self._service.canRunAction(action):
             return
+        
+        for idx in range(len(arguments)):
+            if arguments[idx] is None:
+                arguments[idx] = ''
+            else:
+                arguments[idx] = self._service.get_argument_format(action, idx) + arguments[idx]
             
         command = " ".join([action] + arguments)
             
