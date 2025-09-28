@@ -188,9 +188,12 @@ class Parser:
                 arguments[idx] = self._service.get_argument_format(action, idx) + arguments[idx]
             
         command = " ".join([action] + arguments)
-            
+
+        print("Executing Command: " + command)
         subprocess.run(command, shell=True)
-        print("Command Executed: " + command)
+        print("-----------------------------")
+
+        print("Command Executed")
         print("-----------------------------")
 
 try:

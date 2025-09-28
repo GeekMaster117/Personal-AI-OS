@@ -230,8 +230,10 @@ class ParserService:
         try:
             if self._wrapper.has_action_warning(action):
                 answer = input(f"Do you want to, {self._wrapper.get_action_description(action)} (Y/N): ").lower()
+                print("-----------------------------")
                 if answer != 'y':
                     print("Skipping request...")
+                    print("-----------------------------")
                     return False
             return True
         except Exception as e:

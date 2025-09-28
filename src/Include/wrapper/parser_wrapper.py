@@ -35,8 +35,8 @@ class ParserWrapper:
         # Loads keyword map for either action or argument from file
 
         if action is not None:
-            if not os.path.exists(os.path.join(settings.parser_dir, action)):
-                raise ValueError(f"No argument keyword found for action: {action}")
+            if not os.path.exists(os.path.join(settings.keyword_argument_maps_dir, action)):
+                raise ValueError(f"No argument keyword map found for action: {action}")
 
         map_dir = settings.keyword_argument_map_dir(action) if action else settings.keyword_action_map_dir
         if not os.path.exists(map_dir):
@@ -51,7 +51,7 @@ class ParserWrapper:
         # Loads pipeline for either action or argument from file
 
         if action is not None:
-            if not os.path.exists(os.path.join(settings.parser_dir, action)):
+            if not os.path.exists(os.path.join(settings.argument_pipelines_dir, action)):
                 raise ValueError(f"No argument pipeline found for action: {action}")
 
         pipeline_dir = settings.argument_pipeline_dir(action) if action else settings.action_pipeline_dir
@@ -67,7 +67,7 @@ class ParserWrapper:
         # Saves pipeline for either action or argument from file
 
         if action is not None:
-            if not os.path.exists(os.path.join(settings.parser_dir, action)):
+            if not os.path.exists(os.path.join(settings.argument_pipelines_dir, action)):
                 raise ValueError(f"No argument pipeline found for action: {action}")
             
         pipeline_dir = settings.argument_pipeline_dir(action) if action else settings.action_pipeline_dir
@@ -252,7 +252,7 @@ class ParserWrapper:
     def get_action_keywords(self) -> KeysView[str]:
         # Fetches all action keywords.
 
-        return self._get_keyword_action_map.keys()
+        return self._get_keyword_action_map().keys()
     
     def get_argument_keywords(self, action: str) -> KeysView[str]:
         # Fetches all argument keywords for an action
@@ -277,7 +277,7 @@ class ParserWrapper:
         if "args" not in self._get_commands()[action]:
             raise ValueError(f"Action '{action}' has no arguments")
         
-        all_arguments: list[dict] = self._get_commands()["args"]
+        all_arguments: list[dict] = self._get_commands()[action]["args"]
         
         indices = []
         for i in range(len(all_arguments)):
