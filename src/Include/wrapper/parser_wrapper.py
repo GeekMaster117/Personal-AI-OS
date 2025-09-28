@@ -1,4 +1,5 @@
 import os
+import time
 
 import joblib
 
@@ -27,7 +28,7 @@ class ParserWrapper:
             raise FileNotFoundError("Commands file not found")
         
         try:
-            return joblib.load(settings.commands_dir)
+            return joblib.load(settings.commands_dir, mmap_mode = 'r')
         except Exception as e:
             raise RuntimeError(f"Error loading commands: {e}")
         
@@ -43,7 +44,7 @@ class ParserWrapper:
             raise FileNotFoundError(f"Keyword argument map file not found for action: {action}") if action else FileNotFoundError("Keyword action map file not found")
         
         try:
-            return joblib.load(map_dir)
+            return joblib.load(map_dir, mmap_mode = 'r')
         except Exception as e:
             raise RuntimeError(f"Error loading keyword argument map for action '{action}': {e}") if action else RuntimeError(f"Error loading keyword action map: {e}")
         
@@ -59,7 +60,7 @@ class ParserWrapper:
             raise FileNotFoundError(f"Argument pipeline file not found for action: {action}") if action else FileNotFoundError("Action pipeline file not found")
         
         try:
-            return joblib.load(pipeline_dir)
+            return joblib.load(pipeline_dir, mmap_mode = 'r')
         except Exception as e:
             raise RuntimeError(f"Error loading argument pipeline for action '{action}': {e}") if action else RuntimeError(f"Error loading action pipeline: {e}")
         
