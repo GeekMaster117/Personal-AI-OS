@@ -1,5 +1,4 @@
 from datetime import timedelta
-from pathlib import Path
 
 tick: timedelta = timedelta(seconds=30)
 time_threshold: timedelta = timedelta(minutes=3)
@@ -14,7 +13,18 @@ library_dir: str = "bin"
 cache_dir: str = "cache"
 model_dir: str = "models/Phi-3-mini-4k-instruct-q4.gguf"
 
-parser_model_dir: str = library_dir + "/parser_model.bin"
+parser_dir: str = library_dir + "/parser"
+commands_dir: str = parser_dir + "/commands.bin"
+keyword_action_map_dir: str = parser_dir + "/keyword_action_map.bin"
+action_pipeline_dir: str = parser_dir + "/action_pipeline.bin"
+
+keyword_argument_maps_dir: str = parser_dir + "/keyword argument maps"
+def keyword_argument_map_dir(action: str) -> str:
+    return keyword_argument_maps_dir + "/" + action + "/keyword_argument_map.bin"
+
+argument_pipelines_dir: str = parser_dir + "/argument pipelines"
+def argument_pipeline_dir(action: str) -> str:
+    return argument_pipelines_dir + "/" + action + "/argument_pipeline.bin"
 
 total_model_layers: int = 32
 model_window_size: int = 2048
