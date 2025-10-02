@@ -27,70 +27,96 @@ class AppMonitor:
         
         return False
     
-    def _get_app(self, executable: str, pid: int | None) -> str:
-        if executable in self._app_cache:
-            return self._app_cache[executable]
-        if executable.lower() in system_executable_map.system_exe_map:
-            return system_executable_map.system_exe_map[executable]
+    def _save_app_cache(self, executable: str, app) -> None:
+        self._app_cache[executable] = app
+    
+    def _get_app_cache(self, executable: str) -> str | None:
+        return self._app_cache.get(executable)
+    
+    def _get_app_system(self, executable: str) -> str | None:
+        return system_executable_map.system_exe_map.get(executable.lower())
+    
+    def _get_app_api(self, executable_path: str) -> str | None:
+        try:
+            return win32api.GetFileVersionInfo(executable_path, "\\StringFileInfo\\040904b0\\ProductName")
+        except Exception:
+            return None
+        
+    def _get_app_default(self, executable: str) -> str:
+        return os.path.splitext(executable)[0]
+
+    def _get_executable_path(self, pid: int) -> str:
+        return psutil.Process(pid).exe()
+    
+    def _get_app(self, executable: str, executable_path: str) -> str:
+        if not executable_path.endswith(executable):
+            raise ValueError(f'{executable} does not represent the path {executable_path}')
         
         app: str | None = None
-        if pid is not None:
-            try:
-                app = win32api.GetFileVersionInfo(psutil.Process(pid).exe(), "\\StringFileInfo\\040904b0\\ProductName")
-            except Exception:
-                pass
+        app = self._get_app_cache(executable)
         if not app:
-            app = os.path.splitext(executable)[0]
+            self._get_app_system(executable)
 
-        self._app_cache[executable] = app
+        if not app:
+            app = self._get_app_api(executable_path)
+            if not app:
+                app = self._get_app_default(executable)
+
+            self._save_app_cache(executable, app)
+
         return app
 
-    def get_all_apps_titles(self) -> tuple[dict[str, str], dict[str, set]]:
+    def get_all_apps_titles_executablepaths(self) -> tuple[dict[str, set], dict[str, str]]:
         # Fetches all apps and their titles, with executable names
         # Filters hidden and blacklisted apps and titles
 
-        executable_app_map: dict[str, str] = dict()
-        executable_title_map: dict[str, set[str]] = dict()
+        app_executablepath_map: dict[str, str] = dict()
+        app_title_map: dict[str, set[str]] = dict()
 
         for window in pywinctl.getAllWindows():
-            executable: str = window.getAppName()
-            if self._is_executable_blacklisted(executable):
+            executable_path: str = self._get_executable_path(window.getPID())
+            if not executable_path:
+                continue
+
+            executable: str = os.path.basename(executable_path)
+            if not executable or self._is_executable_blacklisted(executable):
                 continue
 
             title: str = window.title.strip()
-            if not title or not window.isVisible:
-                continue
-            if self._is_title_blacklisted(title, executable):
+            if not title or self._is_title_blacklisted(title, executable):
                 continue
 
-            if executable in self._app_cache:
-                app = self._app_cache[executable]
-            else:
-                app = self._get_app(executable, window.getPID())
+            app = self._get_app(executable, executable_path)
+            if app not in app_executablepath_map:
+                app_executablepath_map[app] = executable_path
+                app_title_map[app] = set()
 
-            if executable not in executable_app_map:
-                executable_app_map[executable] = app
-                executable_title_map[executable] = set()
+            app_title_map[app].add(title)
 
-            executable_title_map[executable].add(title)
+        return app_title_map, app_executablepath_map
 
-        return executable_app_map, executable_title_map
-
-    def get_active_app_title(self) -> tuple[tuple[str, str], str] | tuple[None, None]:
+    def get_active_app_title_executablepath(self) -> tuple[str, str, str] | tuple[None, None, None]:
         # Fetches active app and title, with executable name
 
         active_window = pywinctl.getActiveWindow()
         if not active_window:
-            return None, None
-
-        executable: str = active_window.getAppName()
-        title: str = active_window.title.strip()
-
-        if self._is_executable_blacklisted(executable) or self._is_title_blacklisted(title, executable):
-            return None, None
+            return None, None, None
         
-        app: str | None = self._fetch_app(executable)
-        if not app:
-            return None, None
+        executable_path: str = self._get_executable_path(active_window.getPID())
+        if not executable_path:
+            return None, None, None
 
-        return (executable, app), title
+        executable: str = os.path.basename(executable_path)
+        if not executable or self._is_executable_blacklisted(executable):
+            return None, None, None
+        
+        title: str = active_window.title.strip()
+        if not title or self._is_title_blacklisted(title, executable):
+            return None, None, None
+        
+        app = self._get_app(executable, executable_path)
+
+        return app, title, executable_path
+    
+monitor = AppMonitor()
+print(monitor.get_all_apps_titles_executablepaths())
