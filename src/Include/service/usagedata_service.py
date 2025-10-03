@@ -3,18 +3,24 @@ from Include.wrapper.sqlite_wrapper import SQLiteWrapper
 import settings
 
 class UsagedataService:
-    _day_log_columns: tuple[str] = (
+    _day_log_columns: set[str] = {
         "time_anchor",
         "monotonic_start",
         "monotonic_last_updated",
         "total_downtime_duration",
         "total_anomalies"
-    )
-    _app_title_log_columns: tuple[str] = (
+    }
+    _app_log_columns: set[str] = {
+        "executable_path",
         "total_duration",
         "total_focus_duration",
-        "total_focus_count",
-    )
+        "total_focus_count"
+    }
+    _title_log_columns: set[str] = {
+        "total_duration",
+        "total_focus_duration",
+        "total_focus_count"
+    }
     _focus_period_columns: tuple[str] = (
         "day_hour",
         "focus_duration",
@@ -27,11 +33,11 @@ class UsagedataService:
     def create_if_not_exists_schema(self) -> None:
         self._db.execute_script(settings.schema_dir)
 
-    def add_day_log(self, time_anchor: str, monotonic_anchor: float) -> None:
+    def add_daylog(self, time_anchor: str, monotonic_anchor: float) -> None:
         query = "INSERT INTO day_log (time_anchor, monotonic_start, monotonic_last_updated) VALUES (?, ?, ?)"
         self._db.execute(query, (time_anchor, monotonic_anchor, monotonic_anchor))
 
-    def get_latest_day_log(self, columns: tuple[str] | None = None) -> dict[str, str | int | float]:
+    def get_latest_daylog(self, columns: tuple[str] | None = None) -> dict[str, str | int | float]:
         if columns:
             for column in columns:
                 if column not in UsagedataService._day_log_columns:
@@ -44,7 +50,7 @@ class UsagedataService:
 
         return dict(result) if result else dict()
     
-    def get_day_log(self, id: int, columns: tuple[str] | None = None) -> dict[str, str | int | float]:
+    def get_daylog(self, id: int, columns: tuple[str] | None = None) -> dict[str, str | int | float]:
         if columns:
             for column in columns:
                 if column not in UsagedataService._day_log_columns:
@@ -57,28 +63,29 @@ class UsagedataService:
 
         return dict(result) if result else dict()
 
-    def get_latest_day_log_id(self) -> int | None:
+    def get_latest_daylog_id(self) -> int | None:
         query = "SELECT id FROM day_log ORDER BY id DESC LIMIT 1"
         result = self._db.fetchone(query)
 
         return result[0] if result else None
 
-    def get_day_log_ids(self) -> list[int]:
+    def get_daylog_ids(self) -> list[int]:
         query = "SELECT id FROM day_log ORDER BY id ASC"
         result = self._db.fetchall(query)
 
         return [row[0] for row in result] if result else []
 
-    def get_day_log_row_count(self) -> int:
+    def get_daylog_rowcount(self) -> int:
         query = "SELECT COUNT(*) FROM day_log"
         result = self._db.fetchone(query)
 
         return result[0] if result else 0
     
-    def get_app_log_title_log(self, day_log_id: int) -> dict[str, dict[str, int | float | dict[str, str | int | float]]]:
+    def get_applog_titlelog(self, day_log_id: int) -> dict[str, dict[str, int | float | dict[str, str | int | float]]]:
         query = """
             SELECT 
                 app_log.app_name,
+                app_log.executable_path,
                 app_log.total_duration AS app_total_duration,
                 app_log.total_focus_duration AS app_total_focus_duration,
                 app_log.total_focus_count AS app_total_focus_count,
@@ -103,6 +110,7 @@ class UsagedataService:
             app_name = row['app_name']
             if app_name not in apps_titles:
                 apps_titles[app_name] = {
+                    'executable_path': row['executable_path'],
                     'total_duration': row['app_total_duration'],
                     'total_focus_duration': row['app_total_focus_duration'],
                     'total_focus_count': row['app_total_focus_count'],
@@ -116,15 +124,15 @@ class UsagedataService:
 
         return apps_titles
 
-    def get_latest_day_log_app_log_title_log(self) -> dict[str, dict[str, int | float | dict[str, str | int | float]]]:
-        latest_day_log_id = self.get_latest_day_log_id()
+    def get_latest_applog_titlelog(self) -> dict[str, dict[str, int | float | dict[str, str | int | float]]]:
+        latest_day_log_id = self.get_latest_daylog_id()
         if not latest_day_log_id:
             return dict()
         
-        return self.get_app_log_title_log(latest_day_log_id)
+        return self.get_applog_titlelog(latest_day_log_id)
 
-    def latest_day_log_app_log_name_exists(self, app_name: str) -> bool:
-        latest_day_log_id = self.get_latest_day_log_id()
+    def latest_applog_name_exists(self, app_name: str) -> bool:
+        latest_day_log_id = self.get_latest_daylog_id()
         if not latest_day_log_id:
             return False
 
@@ -136,8 +144,8 @@ class UsagedataService:
 
         return bool(result)
 
-    def latest_day_log_title_log_name_exists(self, app_name: str, title_name: str) -> bool:
-        latest_day_log_id = self.get_latest_day_log_id()
+    def latest_titlelog_name_exists(self, app_name: str, title_name: str) -> bool:
+        latest_day_log_id = self.get_latest_daylog_id()
         if not latest_day_log_id:
             return False
 
@@ -149,8 +157,8 @@ class UsagedataService:
 
         return bool(result)
 
-    def get_latest_day_log_downtime_period(self) -> dict[int, float]:
-        latest_day_log_id = self.get_latest_day_log_id()
+    def get_latest_downtimeperiod(self) -> dict[int, float]:
+        latest_day_log_id = self.get_latest_daylog_id()
         if not latest_day_log_id:
             return dict()
 
@@ -162,7 +170,7 @@ class UsagedataService:
 
         return {row[0]: row[1] for row in result} if result else dict()
 
-    def get_app_focus_period(self, day_log_id: int, app_name: str) -> dict[int, dict[str, int | float]]:
+    def get_appfocusperiod(self, day_log_id: int, app_name: str) -> dict[int, dict[str, int | float]]:
         query = """
             SELECT day_hour, focus_duration, focus_count FROM app_focus_period
             WHERE day_log_id = ? AND app_name = ?
@@ -171,14 +179,14 @@ class UsagedataService:
 
         return {row[0]: {'focus_duration': row[1], 'focus_count': row[2]} for row in result} if result else dict()
 
-    def get_latest_day_log_app_focus_period(self, app_name: str) -> dict[int, dict[str, int | float]]:
-        latest_day_log_id = self.get_latest_day_log_id()
+    def get_latest_appfocusperiod(self, app_name: str) -> dict[int, dict[str, int | float]]:
+        latest_day_log_id = self.get_latest_daylog_id()
         if not latest_day_log_id:
             return dict()
 
-        return self.get_app_focus_period(latest_day_log_id, app_name)
+        return self.get_appfocusperiod(latest_day_log_id, app_name)
     
-    def get_title_focus_period(self, day_log_id: int, app_name: str, title_name: str) -> dict[int, dict[str, int | float]]:
+    def get_titlefocusperiod(self, day_log_id: int, app_name: str, title_name: str) -> dict[int, dict[str, int | float]]:
         query = """
             SELECT day_hour, focus_duration, focus_count FROM title_focus_period
             WHERE day_log_id = ? AND app_name = ? AND title_name = ?
@@ -187,14 +195,14 @@ class UsagedataService:
 
         return {row[0]: {'focus_duration': row[1], 'focus_count': row[2]} for row in result} if result else dict()
 
-    def get_latest_day_log_title_focus_period(self, app_name: str, title_name: str) -> dict[int, dict[str, int | float]]:
-        latest_day_log_id = self.get_latest_day_log_id()
+    def get_latest_titlefocusperiod(self, app_name: str, title_name: str) -> dict[int, dict[str, int | float]]:
+        latest_day_log_id = self.get_latest_daylog_id()
         if not latest_day_log_id:
             return dict()
 
-        return self.get_title_focus_period(latest_day_log_id, app_name, title_name)
+        return self.get_titlefocusperiod(latest_day_log_id, app_name, title_name)
 
-    def update_latest_day_log(self, column_values: dict[str, float | int]) -> None:
+    def update_latest_daylog(self, column_values: dict[str, float | int]) -> None:
         if not column_values:
             return
 
@@ -212,17 +220,17 @@ class UsagedataService:
         """
         self._db.execute(query, values)
 
-    def upsert_latest_day_log_app_log_title_log(self, apps_titles: dict[str, dict[str, int | float | dict[str, str | int | float]]]) -> None:
+    def upsert_latest_applog_titlelog(self, apps_titles: dict[str, dict[str, int | float | dict[str, str | int | float]]]) -> None:
         if not apps_titles:
             return
 
-        latest_day_log_id = self.get_latest_day_log_id()
+        latest_day_log_id = self.get_latest_daylog_id()
         if not latest_day_log_id:
             raise ValueError("No latest day log found.")
 
         app_log_query = """
-            INSERT INTO app_log (day_log_id, app_name, total_duration, total_focus_duration, total_focus_count)
-            VALUES (?, ?, ?, ?, ?)
+            INSERT INTO app_log (day_log_id, app_name, executable_path, total_duration, total_focus_duration, total_focus_count)
+            VALUES (?, ?, ?, ?, ?, ?)
             ON CONFLICT(day_log_id, app_name) DO UPDATE SET
                 total_duration = excluded.total_duration,
                 total_focus_duration = excluded.total_focus_duration,
@@ -249,8 +257,10 @@ class UsagedataService:
                     titles = app_data.get('titles', {})
                     continue
 
-                if app_column not in UsagedataService._app_title_log_columns:
+                if app_column not in UsagedataService._app_log_columns:
                     raise ValueError(f"Invalid column name: {app_column}")
+                
+            executable_path = app_data.get('executable_path', '')
 
             total_duration = app_data.get('total_duration', 0)
             if total_duration < 0:
@@ -264,11 +274,11 @@ class UsagedataService:
             if total_focus_count < 0:
                 raise ValueError(f"Invalid focus count: {total_focus_count}")
             
-            app_values.append((latest_day_log_id, app_name, total_duration, total_focus_duration, total_focus_count))
+            app_values.append((latest_day_log_id, app_name, executable_path, total_duration, total_focus_duration, total_focus_count))
 
             for title_name, title_data in titles.items():
                 for title_column in title_data:
-                    if title_column not in UsagedataService._app_title_log_columns:
+                    if title_column not in UsagedataService._title_log_columns:
                         raise ValueError(f"Invalid column name: {title_column}")
 
                 total_duration = title_data.get('total_duration', 0)
@@ -289,7 +299,7 @@ class UsagedataService:
             tx.execute_many(app_log_query, app_values)
             tx.execute_many(title_log_query, title_values)
 
-    def upsert_latest_day_log_downtime_period(self, hour_durations: dict[int, float]) -> None:
+    def upsert_latest_downtimeperiod(self, hour_durations: dict[int, float]) -> None:
         if not hour_durations:
             return
 
@@ -299,7 +309,7 @@ class UsagedataService:
             if duration < 0 or duration > 3600:
                 raise ValueError(f"Invalid duration: {duration}")
 
-        latest_day_log_id = self.get_latest_day_log_id()
+        latest_day_log_id = self.get_latest_daylog_id()
         if not latest_day_log_id:
             raise ValueError("No latest day log found.")
         
@@ -315,7 +325,7 @@ class UsagedataService:
 
         self._db.execute_many(query, values)
 
-    def upsert_latest_day_log_app_focus_period(self, app_name: str, app_focus_periods: dict[int, dict[str, int | float]]) -> None:
+    def upsert_latest_appfocusperiod(self, app_name: str, app_focus_periods: dict[int, dict[str, int | float]]) -> None:
         if not app_focus_periods:
             return
         
@@ -335,11 +345,11 @@ class UsagedataService:
             if focus_count < 0:
                 raise ValueError(f"Invalid focus count: {focus_count}")
 
-        latest_day_log_id = self.get_latest_day_log_id()
+        latest_day_log_id = self.get_latest_daylog_id()
         if not latest_day_log_id:
             raise ValueError("No latest day log found.")
 
-        if not self.latest_day_log_app_log_name_exists(app_name):
+        if not self.latest_applog_name_exists(app_name):
             raise ValueError(f"App name '{app_name}' not found in the latest day log app logs.")
 
         query = """
@@ -356,7 +366,7 @@ class UsagedataService:
 
         self._db.execute_many(query, values)
 
-    def upsert_latest_day_log_title_focus_period(self, app_name: str, title_name: str, title_focus_periods: dict[int, dict[str, int | float]]) -> None:
+    def upsert_latest_titlefocusperiod(self, app_name: str, title_name: str, title_focus_periods: dict[int, dict[str, int | float]]) -> None:
         if not title_focus_periods:
             return
         
@@ -376,14 +386,14 @@ class UsagedataService:
             if focus_count < 0:
                 raise ValueError(f"Invalid focus count: {focus_count}")
 
-        latest_day_log_id = self.get_latest_day_log_id()
+        latest_day_log_id = self.get_latest_daylog_id()
         if not latest_day_log_id:
             raise ValueError("No latest day log found.")
 
-        if not self.latest_day_log_app_log_name_exists(app_name):
+        if not self.latest_applog_name_exists(app_name):
             raise ValueError(f"App name '{app_name}' not found in the latest day log app logs.")
         
-        if not self.latest_day_log_title_log_name_exists(app_name, title_name):
+        if not self.latest_titlelog_name_exists(app_name, title_name):
             raise ValueError(f"Title name '{title_name}' for app '{app_name}' not found in the latest day log title logs.")
 
         query = """
@@ -400,7 +410,7 @@ class UsagedataService:
 
         self._db.execute_many(query, values)
 
-    def remove_oldest_day_log(self) -> None:
+    def remove_oldest_daylog(self) -> None:
         query = """
             DELETE FROM day_log 
             WHERE id = (SELECT id FROM day_log ORDER BY id ASC LIMIT 1);

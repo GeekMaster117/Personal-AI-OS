@@ -1,7 +1,9 @@
+import time
 from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Any
+
 from Include.service.usagedata_service import UsagedataService
-import time
 
 import settings
 
@@ -29,25 +31,25 @@ class UsagedataDB:
         current_date: datetime.date = datetime_today.date()
         today: str = datetime_today.isoformat()
 
-        latest_day: dict | None = self._service.get_latest_day_log(("time_anchor",))
+        latest_day: dict | None = self._service.get_latest_daylog(("time_anchor",))
         if latest_day and datetime.fromisoformat(latest_day["time_anchor"]).date() == current_date:
             return
 
         now_monotonic: float = time.monotonic()
-        self._service.add_day_log(today, now_monotonic)
+        self._service.add_daylog(today, now_monotonic)
 
     def _ensure_max_logs(self) -> None:
-        while self._service.get_day_log_row_count() > settings.max_logs:
-            self._service.remove_oldest_day_log()
+        while self._service.get_daylog_rowcount() > settings.max_logs:
+            self._service.remove_oldest_daylog()
 
-    def _convert_mono_to_time(self, monotonic_anchor: float, datetime_compare: str, monotonic_time: float) -> datetime.time:
+    def _convert_mono_to_time(self, monotonic_anchor: float, datetime_compare: str, monotonic_time: float) -> Any:
         elapsed_mono: float = monotonic_time - monotonic_anchor
         return (datetime.fromisoformat(datetime_compare) + timedelta(seconds=elapsed_mono)).time()
 
-    def update_apps(self, all_apps: dict[str, set[str]], active_app: str | None = None, active_title: str | None = None) -> None:
+    def update_apps(self, app_title_map: dict[str, set[str]], app_executable_path: dict[str, str], active_app: str | None = None, active_title: str | None = None) -> None:
         self._ensure_log_integrity()
 
-        today_log: dict[str, float | int] = self._service.get_latest_day_log()
+        today_log: dict[str, float | int] = self._service.get_latest_daylog()
 
         now: float = time.monotonic()
         now_datetime: datetime = datetime.today()
@@ -61,13 +63,13 @@ class UsagedataDB:
             today_log["total_anomalies"] += 1
 
             self.apps_open.clear()
-            self.apps_open.update(all_apps)
+            self.apps_open.update(app_title_map)
 
             if active_app and active_title:
                 self.active_app: str = active_app
                 self.active_title: str = active_title
 
-            self._service.update_latest_day_log(today_log)
+            self._service.update_latest_daylog(today_log)
 
             return
         
@@ -77,10 +79,10 @@ class UsagedataDB:
         if downtime > settings.time_threshold.total_seconds():
             today_log["total_downtime_duration"] += downtime
 
-            last_update_timestamp: datetime.time = self._convert_mono_to_time(today_log["monotonic_start"], today_log["time_anchor"], today_log["monotonic_last_updated"])
+            last_update_timestamp: Any = self._convert_mono_to_time(today_log["monotonic_start"], today_log["time_anchor"], today_log["monotonic_last_updated"])
             last_update_hour: int = last_update_timestamp.hour
 
-            downtime_period: dict[int, float] = self._service.get_latest_day_log_downtime_period()
+            downtime_period: dict[int, float] = self._service.get_latest_downtimeperiod()
 
             blackout_hours: int = (current_hour - last_update_hour) % 24
             while blackout_hours > 1:
@@ -110,7 +112,7 @@ class UsagedataDB:
             downtime_period[current_hour] = min(3600, downtime_period[current_hour] + downtime)
 
             self.apps_open.clear()
-            self.apps_open.update(all_apps)
+            self.apps_open.update(app_title_map)
 
             if active_app and active_title:
                 self.active_app: str = active_app
@@ -118,18 +120,18 @@ class UsagedataDB:
 
             today_log["monotonic_last_updated"] = now
 
-            self._service.upsert_latest_day_log_downtime_period(downtime_period)
-            self._service.update_latest_day_log(today_log)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         
+            self._service.upsert_latest_downtimeperiod(downtime_period)
+            self._service.update_latest_daylog(today_log)                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                         
 
             return
         
         elapsed_time: float = now - today_log["monotonic_last_updated"]
 
-        apps_titles: dict[str, dict[str, int | float | dict[str, str | int | float]]] = self._service.get_latest_day_log_app_log_title_log()
+        apps_titles: dict[str, dict[str, int | float | dict[str, str | int | float]]] = self._service.get_latest_applog_titlelog()
 
         # Update focus time and count for active app and active title
         if active_app and active_title and active_app in apps_titles:
-            active_app_focus_period: dict[str, dict[int, float]] = self._service.get_latest_day_log_app_focus_period(active_app)
+            active_app_focus_period: dict[str, dict[int, float]] = self._service.get_latest_appfocusperiod(active_app)
             if current_hour not in active_app_focus_period:
                 active_app_focus_period[current_hour] = {
                     "focus_duration": 0,
@@ -144,10 +146,10 @@ class UsagedataDB:
                 active_app_focus_period[current_hour]["focus_count"] += 1
                 apps_titles[active_app]["total_focus_count"] += 1
 
-            self._service.upsert_latest_day_log_app_focus_period(active_app, active_app_focus_period)
+            self._service.upsert_latest_appfocusperiod(active_app, active_app_focus_period)
 
             if active_title in apps_titles[active_app]["titles"]:
-                active_title_focus_period: dict[str, dict[int, float]] = self._service.get_latest_day_log_title_focus_period(active_app, active_title)
+                active_title_focus_period: dict[str, dict[int, float]] = self._service.get_latest_titlefocusperiod(active_app, active_title)
                 if current_hour not in active_title_focus_period:
                     active_title_focus_period[current_hour] = {
                         "focus_duration": 0,
@@ -162,18 +164,19 @@ class UsagedataDB:
                     active_title_focus_period[current_hour]["focus_count"] += 1
                     apps_titles[active_app]["titles"][active_title]["total_focus_count"] += 1
 
-                self._service.upsert_latest_day_log_title_focus_period(active_app, active_title, active_title_focus_period)
+                self._service.upsert_latest_titlefocusperiod(active_app, active_title, active_title_focus_period)
 
         # Ensure all apps and titles are present in the database
-        for app in all_apps:
+        for app in app_title_map:
             if app not in apps_titles:
                 apps_titles[app] = {
+                    "executable_path": app_executable_path[app],
                     "total_duration": 0,
                     "total_focus_duration": 0,
                     "total_focus_count": 0,
                     "titles": {}
                 }
-            for title in all_apps[app]:
+            for title in app_title_map[app]:
                 if title not in apps_titles[app]["titles"]:
                     apps_titles[app]["titles"][title] = {
                         "total_duration": 0,
@@ -181,18 +184,18 @@ class UsagedataDB:
                         "total_focus_count": 0
                     }
 
-        # Update durations for all apps and titles
-        for app in all_apps:
+        # Update executable and durations for all apps and titles
+        for app in app_title_map:
             if app in self.apps_open:
                 apps_titles[app]["total_duration"] += elapsed_time
 
-            for title in all_apps[app]:
+            for title in app_title_map[app]:
                 if title in self.apps_open.get(app, {}):
                     apps_titles[app]["titles"][title]["total_duration"] += elapsed_time
 
         # Update apps_open with current state
         self.apps_open.clear()
-        self.apps_open.update(all_apps)
+        self.apps_open.update(app_title_map)
 
         # Update active app and title
         if active_app and active_title:
@@ -201,35 +204,38 @@ class UsagedataDB:
 
         today_log["monotonic_last_updated"] = now
 
-        self._service.upsert_latest_day_log_app_log_title_log(apps_titles)
-        self._service.update_latest_day_log(today_log)
+        self._service.upsert_latest_applog_titlelog(apps_titles)
+        self._service.update_latest_daylog(today_log)
     
-    def get_day_log_ids(self) -> list[int]:
+    def get_daylog_ids(self) -> list[int]:
         self._ensure_log_integrity()
 
-        return self._service.get_day_log_ids()
+        return self._service.get_daylog_ids()
 
-    def get_recent_day_log(self, columns: tuple[str] | None = None) -> dict[str, float | int]:
+    def get_recent_daylog(self, columns: tuple[str] | None = None) -> dict[str, float | int]:
         self._ensure_log_integrity()
 
-        return self._service.get_latest_day_log_app_log_title_log(columns)
+        return self._service.get_latest_applog_titlelog(columns)
 
-    def get_day_log(self, day_log_id: int, columns: tuple[str] | None = None) -> dict[str, float | int]:
+    def get_daylog(self, day_log_id: int, columns: tuple[str] | None = None) -> dict[str, float | int]:
         self._ensure_log_integrity()
 
-        return self._service.get_day_log(day_log_id, columns)
+        return self._service.get_daylog(day_log_id, columns)
 
-    def get_app_log_title_log(self, day_log_id: int) -> dict[str, dict[str, int | float | dict[str, str | int | float]]]:
+    def get_applog_titlelog(self, day_log_id: int) -> dict[str, dict[str, int | float | dict[str, str | int | float]]]:
         self._ensure_log_integrity()
 
-        return self._service.get_app_log_title_log(day_log_id)
+        return self._service.get_applog_titlelog(day_log_id)
     
-    def get_app_focus_period(self, day_log_id: int, app_name: str) -> dict[int, dict[str, float]]:
+    def get_appfocusperiod(self, day_log_id: int, app_name: str) -> dict[int, dict[str, float]]:
         self._ensure_log_integrity()
 
-        return self._service.get_app_focus_period(day_log_id, app_name)
+        return self._service.get_appfocusperiod(day_log_id, app_name)
 
-    def get_title_focus_period(self, day_log_id: int, app_name: str, title_name: str) -> dict[int, dict[str, float]]:
+    def get_titlefocusperiod(self, day_log_id: int, app_name: str, title_name: str) -> dict[int, dict[str, float]]:
         self._ensure_log_integrity()
 
-        return self._service.get_title_focus_period(day_log_id, app_name, title_name)
+        return self._service.get_titlefocusperiod(day_log_id, app_name, title_name)
+    
+db = UsagedataDB(settings.usagedata_dir)
+print(db.get_applog_titlelog(db.get_daylog_ids()[-1]))

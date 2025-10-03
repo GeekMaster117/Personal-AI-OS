@@ -2,11 +2,12 @@ import time
 import signal
 import textwrap
 
-import Include.app_monitor as app_monitor
+from Include.app_monitor import AppMonitor
 import settings
 from Include.subsystem.usagedata_db import UsagedataDB
 
 shutdown_request: bool = False
+app_monitor = AppMonitor()
 
 def shutdown_handler(signum, frame) -> None:
     global shutdown_request
@@ -14,11 +15,11 @@ def shutdown_handler(signum, frame) -> None:
     shutdown_request = True
 
 def handle_app_data() -> None:
-    active_app_title: tuple[str, str] | None = app_monitor.get_active_app_title()
-    active_app, active_title = active_app_title
-    app_data: dict[str, set[str]] = app_monitor.get_all_apps()
+    active_app, active_title = app_monitor.get_active_app_title()
 
-    usagedataDB.update_apps(app_data, active_app, active_title)
+    app_title_map, app_executablepath_map = app_monitor.get_all_apps_titles_executablepaths()
+
+    usagedataDB.update_apps(app_title_map, app_executablepath_map, active_app, active_title)
 
 prototype_message = textwrap.dedent("""
 =================== Personal AI OS Prototype =======================

@@ -10,6 +10,7 @@ CREATE TABLE IF NOT EXISTS day_log (
 CREATE TABLE IF NOT EXISTS app_log (
     day_log_id INTEGER NOT NULL,
     app_name TEXT NOT NULL,
+    executable_path TEXT NOT NULL,
     total_duration REAL DEFAULT 0 CHECK(total_duration >= 0),
     total_focus_duration REAL DEFAULT 0 CHECK(total_focus_duration >= 0),
     total_focus_count INTEGER DEFAULT 0 CHECK(total_focus_count >= 0),

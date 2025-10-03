@@ -17,7 +17,7 @@ class SuggestionEngine:
             raise RuntimeError(f"Error initializing SuggestionEngineService: {e}")
 
         self._db_handler: UsagedataDB = db_handler
-        self._day_log_ids: list[int] = self._db_handler.get_day_log_ids() # Assumes that day logs are sorted in ascending order
+        self._day_log_ids: list[int] = self._db_handler.get_daylog_ids() # Assumes that day logs are sorted in ascending order
         if len(self._day_log_ids) == 0:
             raise RuntimeError("No day logs found in the database.")
 
@@ -98,7 +98,7 @@ class SuggestionEngine:
     #   }
     # }
     def _top_data(self, day_log_id: int, only_apps: bool = False, aggregate: bool = False) -> dict:
-        apps_titles = self._db_handler.get_app_log_title_log(day_log_id)
+        apps_titles = self._db_handler.get_applog_titlelog(day_log_id)
 
         apps_titles = heapq.nlargest(settings.data_limit, apps_titles.items(), key=lambda x: self._score(x[1]))
 
@@ -107,9 +107,9 @@ class SuggestionEngine:
 
         for app_name, app_data in apps_titles.items():
             if aggregate:
-                app_data["aggregated_focus_duration"] = self._aggregate_focus_hours(self._db_handler.get_app_focus_period(day_log_id, app_name))
+                app_data["aggregated_focus_duration"] = self._aggregate_focus_hours(self._db_handler.get_appfocusperiod(day_log_id, app_name))
             else:
-                app_data["hourly_focus_data"] = self._db_handler.get_app_focus_period(day_log_id, app_name)
+                app_data["hourly_focus_data"] = self._db_handler.get_appfocusperiod(day_log_id, app_name)
 
             if only_apps:
                 continue
@@ -121,14 +121,14 @@ class SuggestionEngine:
 
             for title_name, title_data in app_data["titles"].items():
                 if aggregate:
-                    title_data["aggregated_focus_duration"] = self._aggregate_focus_hours(self._db_handler.get_title_focus_period(day_log_id, app_name, title_name))
+                    title_data["aggregated_focus_duration"] = self._aggregate_focus_hours(self._db_handler.get_titlefocusperiod(day_log_id, app_name, title_name))
                 else:
-                    title_data["hourly_focus_data"] = self._db_handler.get_title_focus_period(day_log_id, app_name, title_name)
+                    title_data["hourly_focus_data"] = self._db_handler.get_titlefocusperiod(day_log_id, app_name, title_name)
 
         return apps_titles
 
     def _preprocess_log_detailed(self, day_log_id: int) -> None:
-        day_log = self._db_handler.get_day_log(day_log_id, ('time_anchor',))
+        day_log = self._db_handler.get_daylog(day_log_id, ('time_anchor',))
         apps_titles = self._top_data(day_log_id)
 
         summary = textwrap.dedent(f"""
@@ -174,7 +174,7 @@ class SuggestionEngine:
         self.preprocessed_logs[day_log_id] = summary
 
     def _preprocess_log_condensed(self, day_log_id: int) -> None:
-        day_log = self._db_handler.get_day_log(day_log_id, ('time_anchor',))
+        day_log = self._db_handler.get_daylog(day_log_id, ('time_anchor',))
         apps = self._top_data(day_log_id, only_apps=True, aggregate=True)
 
         summary = textwrap.dedent(f"""
