@@ -236,6 +236,3 @@ class UsagedataDB:
         self._ensure_log_integrity()
 
         return self._service.get_titlefocusperiod(day_log_id, app_name, title_name)
-    
-db = UsagedataDB(settings.usagedata_dir)
-print(db.get_applog_titlelog(db.get_daylog_ids()[-1]))
