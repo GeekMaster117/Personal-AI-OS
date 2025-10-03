@@ -95,7 +95,7 @@ class AppMonitor:
 
         return app_title_map, app_executablepath_map
 
-    def get_active_app_title_executablepath(self) -> tuple[str, str, str] | tuple[None, None, None]:
+    def get_active_app_title(self) -> tuple[str, str, str] | tuple[None, None, None]:
         # Fetches active app and title, with executable name
 
         active_window = pywinctl.getActiveWindow()
@@ -116,7 +116,4 @@ class AppMonitor:
         
         app = self._get_app(executable, executable_path)
 
-        return app, title, executable_path
-    
-monitor = AppMonitor()
-print(monitor.get_all_apps_titles_executablepaths())
+        return app, title
