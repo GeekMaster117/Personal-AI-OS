@@ -20,14 +20,17 @@ parser_dir: str = os.path.join(library_dir, "parser")
 commands_dir: str = os.path.join(parser_dir, "commands.bin")
 keyword_action_map_dir: str = os.path.join(parser_dir, "keyword_action_map.bin")
 action_pipeline_dir: str = os.path.join(parser_dir, "action_pipeline.bin")
-
-app_executablepath_map_dir: str = os.path.join(parser_dir, "app_executablepath_map.bin")
-
 def keyword_argument_map_dir(action: str) -> str:
     return os.path.join(parser_dir, action, "keyword_argument_map.bin")
 
 def argument_pipeline_dir(action: str) -> str:
     return os.path.join(parser_dir, action, "argument_pipeline.bin")
+
+parser_executable_dir: str = os.path.join(library_dir, "parser executable")
+
+app_executablepath_map_dir: str = os.path.join(parser_executable_dir, "app_executablepath_map.bin")
+nickname_app_map_dir: str = os.path.join(parser_executable_dir, "nickname_app_map.bin")
+class_app_map_dir: str = os.path.join(parser_executable_dir, "class_app_map.bin")
 
 total_model_layers: int = 32
 model_window_size: int = 2048

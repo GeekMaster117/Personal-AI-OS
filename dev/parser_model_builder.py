@@ -111,13 +111,16 @@ commands = load_commands("dev/commands.json")
 keyword_action_map, keyword_argument_maps, action_pipeline, argument_pipelines = make_keywordmaps_pipelines(commands)
 
 clear_directory(settings.parser_dir)
+clear_directory(settings.parser_executable_dir)
 
 dump(commands, ensure_parents(settings.commands_dir))
 dump(keyword_action_map, ensure_parents(settings.keyword_action_map_dir))
 dump(action_pipeline, ensure_parents(settings.action_pipeline_dir))
 
-dump(dict(), ensure_parents(settings.app_executablepath_map_dir))
-
 for action in commands:
     dump(keyword_argument_maps[action], ensure_parents(settings.keyword_argument_map_dir(action)))
     dump(argument_pipelines[action], ensure_parents(settings.argument_pipeline_dir(action)))
+
+dump(dict(), ensure_parents(settings.app_executablepath_map_dir))
+dump(dict(), ensure_parents(settings.nickname_app_map_dir))
+dump(dict(), ensure_parents(settings.class_app_map_dir))

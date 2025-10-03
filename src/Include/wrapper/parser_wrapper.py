@@ -1,6 +1,4 @@
 import os
-import time
-
 import joblib
 
 from collections.abc import KeysView
@@ -19,11 +17,14 @@ class ParserWrapper:
 
         self._keyword_action_map: dict | None = None
         self._action_pipeline: Any | None = None
-
-        self._app_executablepath_map: dict | None = None
-
         self._keyword_argument_maps: dict = dict()
         self._argument_pipelines: dict[dict] = dict()
+
+        self._app_executablepath_map: dict | None = None
+        self._apps_with_nicknames: set | None = None
+        self._class_app_map: dict | None = None
+
+        self._nickname_app_map: dict | None = None
         
     def _load_commands(self) -> dict:
         # Loads commands from file
@@ -68,7 +69,7 @@ class ParserWrapper:
         except Exception as e:
             raise RuntimeError(f"Error loading argument pipeline for action '{action}': {e}") if action else RuntimeError(f"Error loading action pipeline: {e}")
         
-    def _load_executablepath_map(self) -> dict:
+    def _load_app_executablepath_map(self) -> dict:
         # Loads app executable path map from file
 
         if not os.path.exists(settings.app_executablepath_map_dir):
@@ -78,6 +79,28 @@ class ParserWrapper:
             return joblib.load(settings.app_executablepath_map_dir, mmap_mode = 'r')
         except Exception as e:
             raise RuntimeError(f"Error loading app executable path map: {e}")
+        
+    def _load_nickname_app_map(self) -> dict:
+        # Loads nickname app map from file
+
+        if not os.path.exists(settings.nickname_app_map_dir):
+            raise FileNotFoundError("Nickname app map file not found")
+        
+        try:
+            return joblib.load(settings.nickname_app_map_dir, mmap_mode = 'r')
+        except Exception as e:
+            raise RuntimeError(f"Error loading nickname app path map: {e}")
+        
+    def _load_class_app_map(self) -> dict:
+        # Loads class app map from file
+
+        if not os.path.exists(settings.class_app_map_dir):
+            raise FileNotFoundError("Class app map file not found")
+        
+        try:
+            return joblib.load(settings.class_app_map_dir, mmap_mode = 'r')
+        except Exception as e:
+            raise RuntimeError(f"Error loading class app path map: {e}")
         
     def _save_pipeline(self, pipeline: Any, action: str | None = None) -> None:
         # Saves pipeline for either action or argument from file
@@ -112,7 +135,7 @@ class ParserWrapper:
         self._save_pipeline(self._argument_pipelines[action], action)
 
     def _save_app_executablepath_map(self) -> None:
-        # Checks if app executable path map has been loaded and upserts it
+        # Checks if app executable path map has been loaded and saves it
 
         if self._app_executablepath_map is None:
             raise RuntimeError("App executable path map has not been loaded")
@@ -121,6 +144,25 @@ class ParserWrapper:
             joblib.dump(self._app_executablepath_map, settings.app_executablepath_map_dir)
         except Exception as e:
             raise RuntimeError(f"Error loading app executable path map: {e}")
+        
+    def _save_nickname_app_map(self) -> None:
+        # Checks if nickname app map has been loaded and saves it
+
+        if self._nickname_app_map is None:
+            raise RuntimeError("Nickname app map has not been loaded")
+        
+        try:
+            joblib.dump(self._nickname_app_map, settings.nickname_app_map_dir)
+        except Exception as e:
+            raise RuntimeError(f"Error loading nickname app map: {e}")
+        
+    def _save_class_app_map(self) -> None:
+        # Checks if class app map has been loaded and saves it
+
+        try:
+            joblib.dump(self._class_app_map, settings.class_app_map_dir)
+        except Exception as e:
+            raise RuntimeError(f"Error loading class app map: {e}")
         
     def _get_commands(self) -> dict:
         # Checks if commands is available in memory else loads from file
@@ -166,9 +208,34 @@ class ParserWrapper:
         # Checks if app executable path map is available in memory else loads from file
 
         if self._app_executablepath_map is None:
-            self._app_executablepath_map = self._load_executablepath_map()
+            self._app_executablepath_map = self._load_app_executablepath_map()
 
         return self._app_executablepath_map
+    
+    def _get_nickname_app_map(self) -> dict:
+        # Checks if nickname app map is available in memory else loads from file
+
+        if self._nickname_app_map is None:
+            self._nickname_app_map = self._load_nickname_app_map()
+
+        return self._nickname_app_map
+    
+    def _get_class_app_map(self) -> dict:
+        # Checks if class app map is available in memory else loads from file
+
+        if self._class_app_map is None:
+            self._class_app_map = self._load_class_app_map()
+
+        return self._class_app_map
+    
+    def _has_nicknames(self, app: str) -> bool:
+        # Checks if set of has nicknames is available else creates it
+        # Returns whether an app has nicknames
+
+        if self._apps_with_nicknames is None:
+            self._apps_with_nicknames = set(self._get_nickname_app_map().values())
+
+        return app in self._apps_with_nicknames
     
     def train_action_pipeline(self, action_keywords: list[str], action: str) -> None:
         # Trains action pipeline
