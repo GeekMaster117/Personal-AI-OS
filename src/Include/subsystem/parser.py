@@ -185,7 +185,7 @@ class Parser:
             if arguments[idx] is None:
                 arguments[idx] = ''
             else:
-                arguments[idx] = self._service.get_argument_format(action, idx) + arguments[idx]
+                arguments[idx] = self._service.get_argument_format(action, idx) + '"' + arguments[idx] + '"'
             
         command = " ".join([action] + arguments)
 
