@@ -16,9 +16,12 @@ cache_dir: str = "cache"
 model_dir: str = "models/Phi-3-mini-4k-instruct-q4.gguf"
 
 parser_dir: str = os.path.join(library_dir, "parser")
+
 commands_dir: str = os.path.join(parser_dir, "commands.bin")
 keyword_action_map_dir: str = os.path.join(parser_dir, "keyword_action_map.bin")
 action_pipeline_dir: str = os.path.join(parser_dir, "action_pipeline.bin")
+
+app_executablepath_map_dir: str = os.path.join(parser_dir, "app_executablepath_map.bin")
 
 def keyword_argument_map_dir(action: str) -> str:
     return os.path.join(parser_dir, action, "keyword_argument_map.bin")

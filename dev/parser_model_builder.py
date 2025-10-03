@@ -116,6 +116,8 @@ dump(commands, ensure_parents(settings.commands_dir))
 dump(keyword_action_map, ensure_parents(settings.keyword_action_map_dir))
 dump(action_pipeline, ensure_parents(settings.action_pipeline_dir))
 
+dump(dict(), ensure_parents(settings.app_executablepath_map_dir))
+
 for action in commands:
     dump(keyword_argument_maps[action], ensure_parents(settings.keyword_argument_map_dir(action)))
     dump(argument_pipelines[action], ensure_parents(settings.argument_pipeline_dir(action)))

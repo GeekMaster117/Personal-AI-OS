@@ -16,8 +16,12 @@ import settings
 class ParserWrapper:
     def __init__(self):
         self._commands: dict | None = None
+
         self._keyword_action_map: dict | None = None
         self._action_pipeline: Any | None = None
+
+        self._app_executablepath_map: dict | None = None
+
         self._keyword_argument_maps: dict = dict()
         self._argument_pipelines: dict[dict] = dict()
         
@@ -32,7 +36,7 @@ class ParserWrapper:
         except Exception as e:
             raise RuntimeError(f"Error loading commands: {e}")
         
-    def _load_keywordmap(self, action: str | None = None) -> dict:
+    def _load_keyword_map(self, action: str | None = None) -> dict:
         # Loads keyword map for either action or argument from file
 
         if action is not None:
@@ -63,6 +67,17 @@ class ParserWrapper:
             return joblib.load(pipeline_dir, mmap_mode = 'r')
         except Exception as e:
             raise RuntimeError(f"Error loading argument pipeline for action '{action}': {e}") if action else RuntimeError(f"Error loading action pipeline: {e}")
+        
+    def _load_executablepath_map(self) -> dict:
+        # Loads app executable path map from file
+
+        if not os.path.exists(settings.app_executablepath_map_dir):
+            raise FileNotFoundError("App executable path map file not found")
+        
+        try:
+            return joblib.load(settings.app_executablepath_map_dir, mmap_mode = 'r')
+        except Exception as e:
+            raise RuntimeError(f"Error loading app executable path map: {e}")
         
     def _save_pipeline(self, pipeline: Any, action: str | None = None) -> None:
         # Saves pipeline for either action or argument from file
@@ -95,6 +110,17 @@ class ParserWrapper:
             raise RuntimeError(f"Argument pipeline for action '{action}' has not been loaded")
 
         self._save_pipeline(self._argument_pipelines[action], action)
+
+    def _save_app_executablepath_map(self) -> None:
+        # Checks if app executable path map has been loaded and upserts it
+
+        if self._app_executablepath_map is None:
+            raise RuntimeError("App executable path map has not been loaded")
+        
+        try:
+            joblib.dump(self._app_executablepath_map, settings.app_executablepath_map_dir)
+        except Exception as e:
+            raise RuntimeError(f"Error loading app executable path map: {e}")
         
     def _get_commands(self) -> dict:
         # Checks if commands is available in memory else loads from file
@@ -108,7 +134,7 @@ class ParserWrapper:
         # Checks if keyword action map is available in memory else loads from file
 
         if self._keyword_action_map is None:
-            self._keyword_action_map: dict = self._load_keywordmap()
+            self._keyword_action_map: dict = self._load_keyword_map()
 
         return self._keyword_action_map
     
@@ -116,7 +142,7 @@ class ParserWrapper:
         # Checks if keyword argument map is available in memory else loads from file
 
         if action not in self._keyword_argument_maps:
-            self._keyword_argument_maps[action] = self._load_keywordmap(action)
+            self._keyword_argument_maps[action] = self._load_keyword_map(action)
 
         return self._keyword_argument_maps[action]
     
@@ -135,6 +161,14 @@ class ParserWrapper:
             self._argument_pipelines[action] = self._load_pipeline(action)
 
         return self._argument_pipelines[action]
+    
+    def _get_app_executablepath_map(self) -> dict:
+        # Checks if app executable path map is available in memory else loads from file
+
+        if self._app_executablepath_map is None:
+            self._app_executablepath_map = self._load_executablepath_map()
+
+        return self._app_executablepath_map
     
     def train_action_pipeline(self, action_keywords: list[str], action: str) -> None:
         # Trains action pipeline
