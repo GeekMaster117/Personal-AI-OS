@@ -1,4 +1,18 @@
 {
+    "start": {
+        "keywords": ["open", "launch", "run", "execute", "load", "start"],
+        "args": [
+            {
+                "keywords": ["app", "application", "program", "software"],
+                "type": "any",
+                "format": "\"\" ",
+                "required": true,
+                "description": "Application name"
+            }
+        ],
+        "description": "Open an application",
+        "warning": false
+    },
     "mkdir": {
         "keywords": ["create", "make", "new", "folder", "directory", "dir", "mk", "mkdir"],
         "args": [
