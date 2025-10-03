@@ -20,13 +20,11 @@ commands_dir: str = os.path.join(parser_dir, "commands.bin")
 keyword_action_map_dir: str = os.path.join(parser_dir, "keyword_action_map.bin")
 action_pipeline_dir: str = os.path.join(parser_dir, "action_pipeline.bin")
 
-keyword_argument_maps_dir: str = os.path.join(parser_dir, "keyword argument maps")
 def keyword_argument_map_dir(action: str) -> str:
-    return os.path.join(keyword_argument_maps_dir, action, "keyword_argument_map.bin")
+    return os.path.join(parser_dir, action, "keyword_argument_map.bin")
 
-argument_pipelines_dir: str = os.path.join(parser_dir, "argument pipelines")
 def argument_pipeline_dir(action: str) -> str:
-    return os.path.join(argument_pipelines_dir, action, "argument_pipeline.bin")
+    return os.path.join(parser_dir, action, "argument_pipeline.bin")
 
 total_model_layers: int = 32
 model_window_size: int = 2048

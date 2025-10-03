@@ -36,7 +36,7 @@ class ParserWrapper:
         # Loads keyword map for either action or argument from file
 
         if action is not None:
-            if not os.path.exists(os.path.join(settings.keyword_argument_maps_dir, action)):
+            if not os.path.exists(os.path.join(settings.parser_dir, action)):
                 raise ValueError(f"No argument keyword map found for action: {action}")
 
         map_dir = settings.keyword_argument_map_dir(action) if action else settings.keyword_action_map_dir
@@ -52,7 +52,7 @@ class ParserWrapper:
         # Loads pipeline for either action or argument from file
 
         if action is not None:
-            if not os.path.exists(os.path.join(settings.argument_pipelines_dir, action)):
+            if not os.path.exists(os.path.join(settings.parser_dir, action)):
                 raise ValueError(f"No argument pipeline found for action: {action}")
 
         pipeline_dir = settings.argument_pipeline_dir(action) if action else settings.action_pipeline_dir
@@ -68,7 +68,7 @@ class ParserWrapper:
         # Saves pipeline for either action or argument from file
 
         if action is not None:
-            if not os.path.exists(os.path.join(settings.argument_pipelines_dir, action)):
+            if not os.path.exists(os.path.join(settings.parser_dir, action)):
                 raise ValueError(f"No argument pipeline found for action: {action}")
             
         pipeline_dir = settings.argument_pipeline_dir(action) if action else settings.action_pipeline_dir
