@@ -9,6 +9,8 @@ from numpy import ndarray
 from typing import Any
 
 from Include.filter.stop_words import ENGLISH_STOP_WORDS
+from Include.subsystem.usagedata_db import UsagedataDB
+
 import settings
 
 class ParserWrapper:
@@ -21,10 +23,12 @@ class ParserWrapper:
         self._argument_pipelines: dict[dict] = dict()
 
         self._app_executablepath_map: dict | None = None
-        self._apps_with_nicknames: set | None = None
         self._class_app_map: dict | None = None
-
         self._nickname_app_map: dict | None = None
+
+        self._apps_with_nicknames: set | None = None
+
+        self._usagedata_db = UsagedataDB(settings.usagedata_dir)
         
     def _load_commands(self) -> dict:
         # Loads commands from file
@@ -228,14 +232,18 @@ class ParserWrapper:
 
         return self._class_app_map
     
-    def _has_nicknames(self, app: str) -> bool:
-        # Checks if set of has nicknames is available else creates it
-        # Returns whether an app has nicknames
+    def _get_apps_with_nicknames(self) -> set:
+        # Checks if apps with nicknames is available in memory else creates it
 
         if self._apps_with_nicknames is None:
             self._apps_with_nicknames = set(self._get_nickname_app_map().values())
 
-        return app in self._apps_with_nicknames
+        return self._apps_with_nicknames
+    
+    def _has_nicknames(self, app: str) -> bool:
+        # Returns whether an app has nicknames
+
+        return app in self._get_apps_with_nicknames()
     
     def train_action_pipeline(self, action_keywords: list[str], action: str) -> None:
         # Trains action pipeline
@@ -320,6 +328,59 @@ class ParserWrapper:
         keyword = process.extractOne(token, self.get_argument_keywords(action), scorer=fuzz.ratio, score_cutoff=probability_cutoff * 100)
         if keyword:
             return keyword[0]
+        return None
+    
+    def match_existing_app(self, token: str, probability_cutoff: float) -> str | None:
+        # Matches token with apps.
+        # If confidence is less then probability cutoff returns None, else app name
+
+        if probability_cutoff < 0 or probability_cutoff > 1:
+            raise ValueError(f"Probability cutoff must be in the interval [0, 1], value passed: {probability_cutoff}")
+
+        app = process.extractOne(token, self.get_existing_apps(), scorer=fuzz.ratio, score_cutoff=probability_cutoff * 100)
+        if app:
+            return app[0]
+        return None
+    
+    def match_monitored_app(self, token: str, probability_cutoff: float) -> str | None:
+        # Matches token with monitored apps.
+        # If confidence is less then probability cutoff returns None, else app name
+
+        if probability_cutoff < 0 or probability_cutoff > 1:
+            raise ValueError(f"Probability cutoff must be in the interval [0, 1], value passed: {probability_cutoff}")
+        
+        monitored_app_executablepath_map = self.get_monitored_apps_executablepaths()
+
+        app = process.extractOne(token, monitored_app_executablepath_map.keys(), scorer=fuzz.ratio, score_cutoff=probability_cutoff * 100)
+        if app:
+            self._get_app_executablepath_map()[app[0]] = monitored_app_executablepath_map[app[0]]
+            self._save_app_executablepath_map()
+
+            return app[0]
+        return None
+    
+    def match_nickname(self, token: str, probability_cutoff: float) -> str | None:
+        # Matches token with nicknames.
+        # If confidence is less then probability cutoff returns None, else app name
+
+        if probability_cutoff < 0 or probability_cutoff > 1:
+            raise ValueError(f"Probability cutoff must be in the interval [0, 1], value passed: {probability_cutoff}")
+        
+        nickname = process.extractOne(token, self._get_nickname_app_map().keys(), scorer=fuzz.ratio, score_cutoff=probability_cutoff * 100)
+        if nickname:
+            return nickname
+        return None
+    
+    def match_class(self, token: str, probability_cutoff: float) -> str | None:
+        # Matches token with classes.
+        # If confidence is less then probability cutoff returns None, else app name
+
+        if probability_cutoff < 0 or probability_cutoff > 1:
+            raise ValueError(f"Probability cutoff must be in the interval [0, 1], value passed: {probability_cutoff}")
+        
+        class_name = process.extractOne(token, self._get_class_app_map().keys(), scorer=fuzz.ratio, score_cutoff=probability_cutoff * 100)
+        if class_name:
+            return class_name
         return None
 
     def is_stop_word(self, token: str, probability_cutoff: float) -> bool:
@@ -450,3 +511,41 @@ class ParserWrapper:
             raise ValueError(f"Action '{action}' has no arguments")
         
         return len(self._get_commands()[action]["args"])
+    
+    def get_existing_apps(self) -> KeysView[str]:
+        # Fetches all apps that have been used before
+
+        return self._get_app_executablepath_map().keys()
+    
+    def get_monitored_apps_executablepaths(self) -> dict[str, str]:
+        # Fetches all apps that are monitored
+
+        app_executablepath_map = dict()
+        
+        daylog_ids = self._usagedata_db.get_daylog_ids()
+        for daylog_id in daylog_ids:
+            applog_titlelog = self._usagedata_db.get_applog_titlelog(daylog_id)
+            
+            for app in applog_titlelog:
+                if "app_name" not in app:
+                    raise ValueError(f"Some app log entries have no app_name, daylog_id: {daylog_id}")
+                if "executable_path" not in app:
+                    raise ValueError(f"Some app log entries have no executable_path, daylog_id: {daylog_id}")
+
+                app_executablepath_map[app["app_name"]] = app["executable_path"]
+
+        return app_executablepath_map
+    
+    def get_app_for_nickname(self, nickname: str) -> str | None:
+        # Fetches app for a nickname
+
+        if nickname not in self._get_nickname_app_map():
+            return None
+        return self._get_nickname_app_map()[nickname]
+    
+    def get_app_for_class(self, class_name: str) -> str | None:
+        # Fetches app for a class
+
+        if class_name not in self._get_class_app_map():
+            return None
+        return self._get_class_app_map()[class_name]

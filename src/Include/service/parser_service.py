@@ -331,31 +331,6 @@ class ParserService:
             raise RuntimeError(f"Error extracting top arguments: {e}")
         
         return argument_index
-
-    def predict_argument_nonkeyword_classification(self, action: str, argument_group: tuple[list[str], set[tuple]], max_possibilites: int, probability_cutoff: float = 0.85) -> tuple[int, str, bool] | tuple[int, None, bool] | tuple[None, None, bool]:
-        # Predicts argument and non keyword with classification using argument group.
-        # If confidence of argument is less then probability cutoff, asks user for clarification and trains the classifier.
-        # Asks user for clarification is multiple non keywords are suitable candidates for the argument.
-
-        if probability_cutoff < 0 or probability_cutoff > 1:
-            raise ValueError(f"Probability cutoff must be in the interval [0, 1], value passed: {probability_cutoff}")
-
-        argument_keywords = argument_group[0]
-
-        try:
-            arguments = self._wrapper.predict_top_arguments_indices(action, argument_keywords, max_possibilites, probability_cutoff)
-        except Exception as e:
-            raise RuntimeError(f"Error extracting top arguments: {e}")
-        
-        if arguments[0][1] >= probability_cutoff:
-            return argument_index, None, False
-        else:
-            indices = [arg[0] for arg in arguments]
-            argument_index, non_keyword = self._handle_argument_group_options(action, indices, argument_group, max_possibilites, True)
-        
-        if argument_index is None:
-            return None, None, True
-        return argument_index, non_keyword, False
             
     def extract_tokens(self, query: str) -> list[tuple[str, bool]]:
         # Extracts tokens from query.
@@ -377,7 +352,7 @@ class ParserService:
         
         return tokens
     
-    def extract_action_groups(self, tokens: list[tuple[str, bool]], probability_cutoff: float) -> tuple[list[str], list[list[tuple]]]:
+    def extract_action_groups(self, tokens: list[tuple[str, bool]], probability_cutoff: float = 0.85) -> tuple[list[str], list[list[tuple]]]:
         # Extracts a list of action keywords and, tokens divided by each action keyword encountered.
         # If a token is quoted then is added to action group.
         # If a token is an action keyword (predicted using fuzzy matching) is added to action keywords.
@@ -412,7 +387,7 @@ class ParserService:
 
         return action_keywords, action_groups
     
-    def extract_argument_groups(self, action: str, action_groups: list[list[tuple]], probability_cutoff: float) -> tuple[list[tuple], list[str]]:
+    def extract_argument_groups(self, action: str, action_groups: list[list[tuple]], probability_cutoff: float = 0.85) -> tuple[list[tuple], list[str]]:
         # Extracts a list of argument keywords and their related non keywords, and a list of unrelated non keywords.
         # If a token is an argument keyword (predicted using fuzzy matching) add it to argument keywords, else to non keywords.
         # If a group has no argument keywords then add the non keywords to blind non keywords.
@@ -549,7 +524,25 @@ class ParserService:
         if assigned_arguments:
             return assigned_arguments[0][1]
         return None
-    
+
+    def extract_app(self, token: str, probability_cutoff: float = 0.85) -> str | None:
+        app: str | None = self._wrapper.match_existing_app(token, probability_cutoff)
+
+        if app is None:
+            app = self._wrapper.match_monitored_app(token, probability_cutoff)
+
+        if app is None:
+            nickname = self._wrapper.match_nickname(token, probability_cutoff)
+            if nickname:
+                app = self._wrapper.get_app_for_nickname(nickname)
+
+        if app is None:
+            class_name = self._wrapper.match_class(token, probability_cutoff)
+            if class_name:
+                app = self._wrapper.get_app_for_class(class_name)
+
+        return app
+
     def get_argument_format(self, action: str, idx: int) -> str:
         # Fetches format of an argument.
 
