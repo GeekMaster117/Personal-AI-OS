@@ -236,3 +236,8 @@ class UsagedataDB:
         self._ensure_log_integrity()
 
         return self._service.get_titlefocusperiod(day_log_id, app_name, title_name)
+    
+    def get_mostused_app(self, app_names: tuple[str]) -> str | None:
+        self._ensure_log_integrity()
+
+        return self._service.get_mostused_app(app_names)

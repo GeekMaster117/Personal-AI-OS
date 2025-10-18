@@ -536,16 +536,18 @@ class ParserWrapper:
 
         return app_executablepath_map
     
-    def get_app_for_nickname(self, nickname: str) -> str | None:
+    def get_app_for_nickname(self, nickname: str) -> str:
         # Fetches app for a nickname
 
         if nickname not in self._get_nickname_app_map():
-            return None
+            raise ValueError(f"Nickname {nickname} not found in nickname app map")
+
         return self._get_nickname_app_map()[nickname]
     
-    def get_app_for_class(self, class_name: str) -> str | None:
+    def get_mostused_app_for_class(self, class_name: str) -> str | None:
         # Fetches app for a class
 
         if class_name not in self._get_class_app_map():
-            return None
-        return self._get_class_app_map()[class_name]
+            raise ValueError(f"Class {class_name} not found in nickname app map")
+        
+        return self._usagedata_db.get_mostused_app(tuple(self._get_class_app_map()[class_name]))

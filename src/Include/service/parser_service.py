@@ -539,7 +539,7 @@ class ParserService:
         if app is None:
             class_name = self._wrapper.match_class(token, probability_cutoff)
             if class_name:
-                app = self._wrapper.get_app_for_class(class_name)
+                app = self._wrapper.get_mostused_app_for_class(class_name)
 
         return app
 
