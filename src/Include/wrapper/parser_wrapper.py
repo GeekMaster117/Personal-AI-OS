@@ -526,13 +526,11 @@ class ParserWrapper:
         for daylog_id in daylog_ids:
             applog_titlelog = self._usagedata_db.get_applog_titlelog(daylog_id)
             
-            for app in applog_titlelog:
-                if "app_name" not in app:
-                    raise ValueError(f"Some app log entries have no app_name, daylog_id: {daylog_id}")
-                if "executable_path" not in app:
+            for app_name, app_data in applog_titlelog.items():
+                if "executable_path" not in app_data:
                     raise ValueError(f"Some app log entries have no executable_path, daylog_id: {daylog_id}")
 
-                app_executablepath_map[app["app_name"]] = app["executable_path"]
+                app_executablepath_map[app_name] = app_data["executable_path"]
 
         return app_executablepath_map
     
@@ -543,6 +541,14 @@ class ParserWrapper:
             raise ValueError(f"Nickname {nickname} not found in nickname app map")
 
         return self._get_nickname_app_map()[nickname]
+    
+    def get_executablepath(self, app: str) -> str:
+        # Fetches executable path for app
+
+        if app not in self._get_app_executablepath_map():
+            raise ValueError(f"App {app} not found in app executable path map")
+        
+        return self._get_app_executablepath_map()[app]
     
     def get_mostused_app_for_class(self, class_name: str) -> str | None:
         # Fetches app for a class

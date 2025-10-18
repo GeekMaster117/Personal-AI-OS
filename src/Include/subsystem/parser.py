@@ -177,9 +177,28 @@ class Parser:
         return action, arguments
     
     def execute_action(self, action : str, arguments: list[str]) -> None:
+        try:
+            arguments_count = self._service.get_arguments_count(action)
+        except Exception as e:
+            raise ValueError(f"Error getting arguments count: {e}")
+        
+        if len(arguments) != arguments_count:
+            raise ValueError(f"Invalid arguments count. Expected {arguments_count}, got {len(arguments)}")
+
         # Check if action can be executed
         if not self._service.canRunAction(action):
             return
+        
+        if action == "start":
+            app = self._service.extract_app(arguments[0])
+            if app is None:
+                print(f"Could not find app {arguments[0]}. Try having the app open, with observe module running in background.")
+                print("-----------------------------")
+
+                return
+            
+            executable_path = self._service.get_executablepath(app)
+            arguments[0] = executable_path
         
         for idx in range(len(arguments)):
             if arguments[idx] is None:

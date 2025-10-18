@@ -552,3 +552,6 @@ class ParserService:
         # Fetched no.of arguments available for an action.
 
         return self._wrapper.get_arguments_count(action)
+    
+    def get_executablepath(self, app: str) -> str | None:
+        return self._wrapper.get_executablepath(app)
