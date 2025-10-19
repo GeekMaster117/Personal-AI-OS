@@ -224,7 +224,7 @@ class ParserService:
         
         return options
         
-    def canRunAction(self, action: str) -> bool:
+    def canrun_action(self, action: str) -> bool:
         # Checks if action has warning flag set to true, and asks user for permission to run.
 
         try:
@@ -238,6 +238,32 @@ class ParserService:
             return True
         except Exception as e:
             raise RuntimeError(f"Error checking if action can run: {e}")
+        
+    def handle_nickname_class(self, app: str) -> None:
+        # Handles nickname and class assignment for an app.
+
+        if self._wrapper.has_nicknames(app) or self._wrapper.in_class(app):
+            return
+
+        if not self._wrapper.has_nicknames(app):
+            answer = self._handle_options(["Yes", "No"], options_message = f"Do you want to set a nickname for '{app}'?")
+            print("-----------------------------")
+
+            if answer == 0:
+                nickname = input(f"Enter nickname for '{app}': ")
+                print("-----------------------------")
+
+                self._wrapper.add_nickname(nickname, app)
+
+        if not self._wrapper.in_class(app):
+            answer = self._handle_options(["Yes", "No"], options_message = f"Do you want to add '{app}' to a class?")
+            print("-----------------------------")
+
+            if answer == 0:
+                class_name = input(f"Enter class name for '{app}': ")
+                print("-----------------------------")
+
+                self._wrapper.add_to_class(class_name, app)
 
     def predict_action_frequency(self, action_keywords: list[str], probability_cutoff: float = 0.85) -> str | None:
         # Predicts action using frequency of action keywords.

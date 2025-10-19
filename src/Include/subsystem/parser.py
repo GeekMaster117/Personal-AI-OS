@@ -186,7 +186,7 @@ class Parser:
             raise ValueError(f"Invalid arguments count. Expected {arguments_count}, got {len(arguments)}")
 
         # Check if action can be executed
-        if not self._service.canRunAction(action):
+        if not self._service.canrun_action(action):
             return
         
         if action == "start":
@@ -214,6 +214,9 @@ class Parser:
 
         print("Command Executed")
         print("-----------------------------")
+
+        if action == "start":
+            self._service.handle_nickname_class(app)
 
 try:
     parser = Parser()

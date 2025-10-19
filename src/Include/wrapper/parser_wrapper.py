@@ -27,6 +27,7 @@ class ParserWrapper:
         self._nickname_app_map: dict | None = None
 
         self._apps_with_nicknames: set | None = None
+        self._apps_in_class: set | None = None
 
         self._usagedata_db = UsagedataDB(settings.usagedata_dir)
         
@@ -240,11 +241,53 @@ class ParserWrapper:
 
         return self._apps_with_nicknames
     
-    def _has_nicknames(self, app: str) -> bool:
+    def _get_apps_in_class(self) -> set:
+        # Checks if apps in class is available in memory else creates it
+
+        if self._apps_in_class is None:
+            all_apps = set()
+            for apps in self._get_class_app_map().values():
+                for app in apps:
+                    all_apps.add(app)
+            self._apps_in_class = all_apps
+
+        return self._apps_in_class
+    
+    def has_nicknames(self, app: str) -> bool:
         # Returns whether an app has nicknames
 
         return app in self._get_apps_with_nicknames()
     
+    def in_class(self, app: str) -> bool:
+        # Returns whether an app is in a class
+
+        return app in self._get_apps_in_class()
+    
+    def add_nickname(self, nickname: str, app: str) -> None:
+        # Adds a nickname for an app
+
+        self._get_nickname_app_map()[nickname] = app
+
+        try:
+            self._save_nickname_app_map()
+        except Exception as e:
+            print("Warning: Unable to save nickname:", e)
+
+    def add_to_class(self, class_name: str, app: str) -> None:
+        # Adds an app to a class
+
+        class_app_map = self._get_class_app_map()
+        if class_name not in class_app_map:
+            class_app_map[class_name] = []
+
+        if app not in class_app_map[class_name]:
+            class_app_map[class_name].append(app)
+
+            try:
+                self._save_class_app_map()
+            except Exception as e:
+                print("Warning: Unable to save to class:", e)
+
     def train_action_pipeline(self, action_keywords: list[str], action: str) -> None:
         # Trains action pipeline
 
@@ -368,7 +411,7 @@ class ParserWrapper:
         
         nickname = process.extractOne(token, self._get_nickname_app_map().keys(), scorer=fuzz.ratio, score_cutoff=probability_cutoff * 100)
         if nickname:
-            return nickname
+            return nickname[0]
         return None
     
     def match_class(self, token: str, probability_cutoff: float) -> str | None:
@@ -380,7 +423,7 @@ class ParserWrapper:
         
         class_name = process.extractOne(token, self._get_class_app_map().keys(), scorer=fuzz.ratio, score_cutoff=probability_cutoff * 100)
         if class_name:
-            return class_name
+            return class_name[0]
         return None
 
     def is_stop_word(self, token: str, probability_cutoff: float) -> bool:
