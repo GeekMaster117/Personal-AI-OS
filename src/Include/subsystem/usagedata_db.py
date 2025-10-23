@@ -240,4 +240,15 @@ class UsagedataDB:
     def get_mostused_app(self, app_names: tuple[str]) -> str | None:
         self._ensure_log_integrity()
 
-        return self._service.get_mostused_app(app_names)
+        total_durations_today: tuple[float] = tuple(self._service.get_totalduration(app_name, (self._service.get_latest_daylog_id(),)) for app_name in app_names)
+        total_durations_historical: tuple[float] = tuple(self._service.get_totalduration(app_name, self._service.get_daylog_ids()[:-1]) for app_name in app_names)
+
+        total_durations_weighted = tuple(map(
+            lambda total_durations: settings.class_day_historical_weight * total_durations[1] + (1 - settings.class_day_historical_weight) * total_durations[0],
+            zip(total_durations_today, total_durations_historical)
+        ))
+
+        return max(
+            zip(app_names, total_durations_weighted),
+            key=lambda item: item[1]
+        )[0]

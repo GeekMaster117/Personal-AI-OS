@@ -202,21 +202,21 @@ class UsagedataService:
 
         return self.get_titlefocusperiod(latest_day_log_id, app_name, title_name)
     
-    def get_mostused_app(self, app_names: tuple[str]) -> str | None:
+    def get_totalduration(self, app_name: str, day_log_ids: tuple[int]) -> int:
         def get_query() -> str:
-            placeholders = ','.join(['?'] * len(app_names))
+            day_placeholders = ','.join(['?'] * len(day_log_ids))
 
             return f"""
-                SELECT app_name, SUM(total_duration) AS total_duration_sum
+                SELECT SUM(total_duration) AS total_duration_sum
                 FROM app_log
-                WHERE app_name IN ({placeholders})
-                GROUP BY app_name
-                ORDER BY total_duration_sum DESC
-                LIMIT 1;
+                WHERE app_name = ? AND day_log_id IN ({day_placeholders})
             """
         
-        result = self._db.fetchone(get_query(), app_names)
-        return result[0] if result else None
+        if not day_log_ids:
+            return 0
+        
+        result = self._db.fetchone(get_query(), (app_name, *day_log_ids))
+        return result[0] if result else 0
 
     def update_latest_daylog(self, column_values: dict[str, float | int]) -> None:
         if not column_values:

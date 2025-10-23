@@ -32,11 +32,13 @@ app_executablepath_map_dir: str = os.path.join(parser_executable_dir, "app_execu
 nickname_app_map_dir: str = os.path.join(parser_executable_dir, "nickname_app_map.bin")
 class_app_map_dir: str = os.path.join(parser_executable_dir, "class_app_map.bin")
 
+class_day_historical_weight: float = 0.6
+
 total_model_layers: int = 32
 model_window_size: int = 2048
-layer_batchsize_weight = 0.5
+layer_batchsize_weight: float = 0.5
 
-supported_arch = {61, 75, 86, 89, 120}
+supported_arch: set[int] = {61, 75, 86, 89, 120}
 
 max_logs: int = 7
 data_limit: int = 3
