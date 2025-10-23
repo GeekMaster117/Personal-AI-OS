@@ -160,7 +160,7 @@ class ParserService:
             try:
                 type = self._wrapper.get_argument_type(action, argument_index)
             except Exception as e:
-                raise RuntimeError(f"Error fetching argument type for action '{action}' and index '{argument_index}': {e}")
+                raise RuntimeError(f"Error fetching argument type for action '{action}' and argument '{self._wrapper.get_argument_description(action, argument_index)}': {e}")
 
             if type == "any":
                 any_type_indices.append(len(arguments))
@@ -177,7 +177,7 @@ class ParserService:
             try:
                 argument = self._pop_nonkeyword(type, classified_nonkeywords, classified_priority_nonkeywords, throw_if_not_found)
             except Exception:
-                raise SyntaxError(f"Could not find valid value for argument '{argument_index}'")
+                raise SyntaxError(f"Could not find valid value for argument '{self._wrapper.get_argument_description(action, argument_index)}'")
             
             if argument:
                 arguments[argument_index] = (argument_index, argument)
@@ -357,6 +357,31 @@ class ParserService:
             raise RuntimeError(f"Error extracting top arguments: {e}")
         
         return argument_index
+    
+    def predict_argument_nonkeyword_classification(self, action: str, argument_group: tuple[list[str], set[tuple]], max_possibilites: int, probability_cutoff: float = 0.85) -> tuple[int, str, bool] | tuple[int, None, bool] | tuple[None, None, bool]:
+        # Predicts argument and non keyword with classification using argument group.
+        # If confidence of argument is less then probability cutoff, asks user for clarification and trains the classifier.
+        # Asks user for clarification is multiple non keywords are suitable candidates for the argument.
+
+        if probability_cutoff < 0 or probability_cutoff > 1:
+            raise ValueError(f"Probability cutoff must be in the interval [0, 1], value passed: {probability_cutoff}")
+
+        argument_keywords = argument_group[0]
+
+        try:
+            arguments = self._wrapper.predict_top_arguments_indices(action, argument_keywords, max_possibilites, probability_cutoff)
+        except Exception as e:
+            raise RuntimeError(f"Error extracting top arguments: {e}")
+        
+        if arguments[0][1] >= probability_cutoff:
+            return argument_index, None, False
+        else:
+            indices = [arg[0] for arg in arguments]
+            argument_index, non_keyword = self._handle_argument_group_options(action, indices, argument_group, max_possibilites, True)
+        
+        if argument_index is None:
+            return None, None, True
+        return argument_index, non_keyword, False
             
     def extract_tokens(self, query: str) -> list[tuple[str, bool]]:
         # Extracts tokens from query.
@@ -552,6 +577,7 @@ class ParserService:
         return None
 
     def extract_app(self, token: str, probability_cutoff: float = 0.85) -> str | None:
+        token = token.lower()
         app: str | None = self._wrapper.match_existing_app(token, probability_cutoff)
 
         if app is None:

@@ -38,12 +38,12 @@ class AppMonitor:
     
     def _get_app_api(self, executable_path: str) -> str | None:
         try:
-            return win32api.GetFileVersionInfo(executable_path, "\\StringFileInfo\\040904b0\\ProductName")
+            return win32api.GetFileVersionInfo(executable_path, "\\StringFileInfo\\040904b0\\ProductName").lower()
         except Exception:
             return None
         
     def _get_app_default(self, executable: str) -> str:
-        return os.path.splitext(executable)[0]
+        return os.path.splitext(executable)[0].lower()
 
     def _get_executable_path(self, pid: int) -> str:
         return psutil.Process(pid).exe()

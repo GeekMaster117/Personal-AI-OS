@@ -334,6 +334,31 @@ class ParserWrapper:
 
         return top_actions
     
+    def predict_top_arguments_indices(self, action: str, keywords: list[str], max_possibilities: int, probability_cutoff: float) -> list[tuple]:
+        # Predicts top most possible arguments for the action and argument keywords.
+        # Keeps adding arguments to list, until total probability exceeds probability cutoff.
+        # Returns a list of arguments with their probabilities in descending order.
+
+        if probability_cutoff < 0 or probability_cutoff > 1:
+            raise ValueError(f"Probability cutoff must be in the interval [0, 1], value passed: {probability_cutoff}")
+        
+        argument_pipeline = self._get_argument_pipeline(action)
+        probabilities: ndarray = argument_pipeline.predict_proba([" ".join(keywords)])[0]
+
+        classes = [(int(argument_pipeline.classes_[idx]), float(probability)) for idx, probability in enumerate(probabilities)]
+        top_arguments_indices_max = sorted(classes, reverse=True, key = lambda x: x[1])[:min(len(probabilities), max_possibilities)]
+
+        top_arguments_indices = []
+        total_probability = 0
+        for argument in top_arguments_indices_max:
+            top_arguments_indices.append(argument)
+            total_probability += argument[1]
+
+            if total_probability >= probability_cutoff:
+                break
+
+        return top_arguments_indices
+    
     def predict_argument_index(self, action: str, argument_keywords: list[str], probability_cutoff: float) -> int | None:
         # Predicts argument using argument keywords.
         # If confidence is less then probability cutoff, returns None.
@@ -380,7 +405,7 @@ class ParserWrapper:
         if probability_cutoff < 0 or probability_cutoff > 1:
             raise ValueError(f"Probability cutoff must be in the interval [0, 1], value passed: {probability_cutoff}")
 
-        app = process.extractOne(token, self.get_existing_apps(), scorer=fuzz.ratio, score_cutoff=probability_cutoff * 100)
+        app = process.extractOne(token, self.get_existing_apps(), scorer=fuzz.partial_token_set_ratio, score_cutoff=probability_cutoff * 100)
         if app:
             return app[0]
         return None
@@ -394,7 +419,7 @@ class ParserWrapper:
         
         monitored_app_executablepath_map = self.get_monitored_apps_executablepaths()
 
-        app = process.extractOne(token, monitored_app_executablepath_map.keys(), scorer=fuzz.ratio, score_cutoff=probability_cutoff * 100)
+        app = process.extractOne(token, monitored_app_executablepath_map.keys(), scorer=fuzz.partial_token_set_ratio, score_cutoff=probability_cutoff * 100)
         if app:
             self._get_app_executablepath_map()[app[0]] = monitored_app_executablepath_map[app[0]]
             self._save_app_executablepath_map()
@@ -408,8 +433,8 @@ class ParserWrapper:
 
         if probability_cutoff < 0 or probability_cutoff > 1:
             raise ValueError(f"Probability cutoff must be in the interval [0, 1], value passed: {probability_cutoff}")
-        
-        nickname = process.extractOne(token, self._get_nickname_app_map().keys(), scorer=fuzz.ratio, score_cutoff=probability_cutoff * 100)
+
+        nickname = process.extractOne(token, self._get_nickname_app_map().keys(), scorer=fuzz.partial_token_sort_ratio, score_cutoff=probability_cutoff * 100)
         if nickname:
             return nickname[0]
         return None
@@ -420,8 +445,8 @@ class ParserWrapper:
 
         if probability_cutoff < 0 or probability_cutoff > 1:
             raise ValueError(f"Probability cutoff must be in the interval [0, 1], value passed: {probability_cutoff}")
-        
-        class_name = process.extractOne(token, self._get_class_app_map().keys(), scorer=fuzz.ratio, score_cutoff=probability_cutoff * 100)
+
+        class_name = process.extractOne(token, self._get_class_app_map().keys(), scorer=fuzz.partial_token_sort_ratio, score_cutoff=probability_cutoff * 100)
         if class_name:
             return class_name[0]
         return None

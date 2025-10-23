@@ -1,5 +1,5 @@
 system_exe_map = {
-    "explorer.exe": "File Explorer",
-    "svchost.exe": "Service Host",
-    "lsass.exe": "Local Security Authority",
+    "explorer.exe": "file explorer",
+    "svchost.exe": "service host",
+    "lsass.exe": "local security authority",
 }
