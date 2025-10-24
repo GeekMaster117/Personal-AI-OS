@@ -70,7 +70,7 @@ class ParserWrapper:
             raise FileNotFoundError(f"Argument pipeline file not found for action: {action}") if action else FileNotFoundError("Action pipeline file not found")
         
         try:
-            return joblib.load(pipeline_dir, mmap_mode = 'r')
+            return joblib.load(pipeline_dir)
         except Exception as e:
             raise RuntimeError(f"Error loading argument pipeline for action '{action}': {e}") if action else RuntimeError(f"Error loading action pipeline: {e}")
         
