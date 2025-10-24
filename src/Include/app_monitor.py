@@ -55,7 +55,7 @@ class AppMonitor:
         app: str | None = None
         app = self._get_app_cache(executable)
         if not app:
-            self._get_app_system(executable)
+            app = self._get_app_system(executable)
 
         if not app:
             app = self._get_app_api(executable_path)
