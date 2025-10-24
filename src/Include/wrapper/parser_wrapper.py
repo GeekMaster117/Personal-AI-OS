@@ -263,7 +263,7 @@ class ParserWrapper:
 
         return app in self._get_apps_in_class()
     
-    def add_nickname(self, nickname: str, app: str) -> None:
+    def set_nickname(self, nickname: str, app: str) -> None:
         # Adds a nickname for an app
 
         self._get_nickname_app_map()[nickname] = app
@@ -617,6 +617,11 @@ class ParserWrapper:
             raise ValueError(f"App {app} not found in app executable path map")
         
         return self._get_app_executablepath_map()[app]
+    
+    def get_classes(self) -> KeysView[str]:
+        # Fetches all classes
+
+        return self._get_class_app_map().keys()
     
     def get_mostused_app_for_class(self, class_name: str) -> str | None:
         # Fetches app for a class

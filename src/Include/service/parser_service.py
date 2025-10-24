@@ -223,6 +223,42 @@ class ParserService:
                 raise SyntaxError(f"Too many possibilities")
         
         return options
+    
+    def _handle_nickname(self, app: str) -> None:
+        # Handles nickname assignment for an app.
+
+        answer = self._handle_options(["Yes", "No"], options_message = f"Do you want to set a nickname for '{app}'?")
+        print("-----------------------------")
+
+        if answer == 0:
+            nickname = input(f"Enter nickname for '{app}': ")
+            print("-----------------------------")
+
+            self._wrapper.set_nickname(nickname, app)
+
+    def _handle_class(self, app: str) -> None:
+        # Handles class assignment for an app.
+
+        answer = self._handle_options(["Yes", "No"], options_message = f"Do you want to add '{app}' to a class?")
+        print("-----------------------------")
+
+        classes = [*self._wrapper.get_classes(), "Create new class"]
+
+        if answer == 0:
+            answer = self._handle_options(classes, options_message = f"Do you want to add '{app}' to an existing class, or create a new class?")
+            print("-----------------------------")
+        else:
+            return
+
+        if answer == len(classes) - 1:
+            class_name = input(f"Enter class name for '{app}': ")
+            print("-----------------------------")
+        elif answer < len(classes) - 1:
+            class_name = classes[answer]
+        else:
+            return
+
+        self._wrapper.add_to_class(class_name, app)
         
     def canrun_action(self, action: str) -> bool:
         # Checks if action has warning flag set to true, and asks user for permission to run.
@@ -245,25 +281,8 @@ class ParserService:
         if self._wrapper.has_nicknames(app) or self._wrapper.in_class(app):
             return
 
-        if not self._wrapper.has_nicknames(app):
-            answer = self._handle_options(["Yes", "No"], options_message = f"Do you want to set a nickname for '{app}'?")
-            print("-----------------------------")
-
-            if answer == 0:
-                nickname = input(f"Enter nickname for '{app}': ")
-                print("-----------------------------")
-
-                self._wrapper.add_nickname(nickname, app)
-
-        if not self._wrapper.in_class(app):
-            answer = self._handle_options(["Yes", "No"], options_message = f"Do you want to add '{app}' to a class?")
-            print("-----------------------------")
-
-            if answer == 0:
-                class_name = input(f"Enter class name for '{app}': ")
-                print("-----------------------------")
-
-                self._wrapper.add_to_class(class_name, app)
+        self._handle_nickname(app)
+        self._handle_class(app)
 
     def predict_action_frequency(self, action_keywords: list[str], probability_cutoff: float = 0.85) -> str | None:
         # Predicts action using frequency of action keywords.
