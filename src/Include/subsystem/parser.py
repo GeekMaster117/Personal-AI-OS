@@ -2,6 +2,8 @@ import subprocess
 
 from collections import defaultdict
 
+from typing import Any
+
 from Include.service.parser_service import ParserService
 
 class Parser:
@@ -30,6 +32,47 @@ class Parser:
             result.extend(list2[ptr2:])
 
         return result
+    
+    def _handle_parseraction(self, action: str, arguments: list[str]) -> bool:
+        # Handle special parser actions, and return if action is handled
+
+        return_value = True
+
+        if action == "exit":
+            print("Exiting application...")
+            print("-----------------------------")
+            exit(0)
+        else:
+            return_value = False
+
+        return return_value
+    
+    def _preprocess_arguments(self, action: str, arguments: list[str]) -> Any:
+        # Preprocess arguments based on action type, and returns any data needed for later
+
+        preprocess_data: Any = None
+
+        if action == "start":
+            preprocess_data = self._service.extract_app(arguments[0])
+            if preprocess_data is None:
+                raise ValueError(f"Could not find app {arguments[0]}. Try having the app open, with observe module running in background.")
+            
+            executable_path = self._service.get_executablepath(preprocess_data)
+            arguments[0] = executable_path
+
+        for idx in range(len(arguments)):
+            if arguments[idx] is None:
+                arguments[idx] = ''
+            else:
+                arguments[idx] = self._service.get_argument_format(action, idx) + '"' + arguments[idx] + '"'
+
+        return preprocess_data
+    
+    def _postprocess(self, action: str, data: Any) -> None:
+        # Postprocess after action execution based on action type and custom data
+
+        if action == "start":
+            self._service.handle_nickname_class(data)
         
     def extract_action_arguments(self, query: str, probability_cutoff: float = 0.85) -> tuple[str, list[str]] | tuple[None, None]:
         # Extract tokens from query
@@ -184,27 +227,17 @@ class Parser:
         
         if len(arguments) != arguments_count:
             raise ValueError(f"Invalid arguments count. Expected {arguments_count}, got {len(arguments)}")
+        
+        # Handle special parser actions
+        if self._handle_parseraction(action, arguments):
+            return
 
         # Check if action can be executed
         if not self._service.canrun_action(action):
             return
         
-        if action == "start":
-            app = self._service.extract_app(arguments[0])
-            if app is None:
-                print(f"Could not find app {arguments[0]}. Try having the app open, with observe module running in background.")
-                print("-----------------------------")
-
-                return
-            
-            executable_path = self._service.get_executablepath(app)
-            arguments[0] = executable_path
-        
-        for idx in range(len(arguments)):
-            if arguments[idx] is None:
-                arguments[idx] = ''
-            else:
-                arguments[idx] = self._service.get_argument_format(action, idx) + '"' + arguments[idx] + '"'
+        # Preprocess action and arguments before execution
+        preprocess_data = self._preprocess_arguments(action, arguments)
             
         command = " ".join([action] + arguments)
 
@@ -215,8 +248,8 @@ class Parser:
         print("Command Executed")
         print("-----------------------------")
 
-        if action == "start":
-            self._service.handle_nickname_class(app)
+        # Postprocess after action execution
+        self._postprocess(action, preprocess_data)
 
 try:
     parser = Parser()
@@ -244,10 +277,5 @@ while True:
 
     query = input(f"Enter request: ")
     print("-----------------------------")
-
-if action == "exit":
-    print("Exiting application...")
-    print("-----------------------------")
-    exit(0)
 
 parser.execute_action(action, arguments)
