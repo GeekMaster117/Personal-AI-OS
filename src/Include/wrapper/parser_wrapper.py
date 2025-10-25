@@ -1,4 +1,6 @@
 import os
+import sys
+import subprocess
 import joblib
 
 from collections.abc import KeysView
@@ -14,7 +16,7 @@ from Include.subsystem.usagedata_db import UsagedataDB
 import settings
 
 class ParserWrapper:
-    def __init__(self):
+    def __init__(self, environment: settings.Environment):
         self._commands: dict | None = None
 
         self._keyword_action_map: dict | None = None
@@ -29,7 +31,20 @@ class ParserWrapper:
         self._apps_with_nicknames: set | None = None
         self._apps_in_class: set | None = None
 
-        self._usagedata_db = UsagedataDB(settings.usagedata_dir)
+        self._usagedata_db: UsagedataDB = UsagedataDB(settings.usagedata_dir)
+
+        self._observe: subprocess.Popen | None = None
+        if environment == settings.Environment.PROD:
+            self._observe = subprocess.Popen(["observe.exe"])
+        elif environment == settings.Environment.DEV:
+            self._observe = subprocess.Popen([sys.executable, "src/observe.py"], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        else:
+            raise ValueError(f"Invalid environment: '{environment}'. Valid options are: {[env.value for env in settings.Environment]}")
+
+    def __del__(self):
+        if self._observe is not None:
+            self._observe.terminate()
+            self._observe.wait()
         
     def _load_commands(self) -> dict:
         # Loads commands from file

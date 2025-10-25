@@ -4,13 +4,20 @@ import shlex
 
 from Include.wrapper.parser_wrapper import ParserWrapper
 
+import settings
+
 class ParserService:
-    def __init__(self):
+    def __init__(self, environment: settings.Environment):
+        self._wrapper: ParserWrapper | None = None
         try:
-            self._wrapper = ParserWrapper()
+            self._wrapper = ParserWrapper(environment)
         except Exception as e:
             raise RuntimeError(f"Error initialising parser wrapper: {e}")
         
+    def __del__(self):
+        if self._wrapper is not None:
+            del self._wrapper
+
     def _handle_options(self, options: list[str], options_message = "Select an option:", select_message = "Enter an answer", key = lambda x: x) -> int:
         # An extra option(skip request) is provided to user.
         # If user enters skip request or any number outside given options, -1 is returned.

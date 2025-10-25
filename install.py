@@ -1,9 +1,13 @@
 import os
 import requests
 import sys
-import time
 import subprocess
+
+import time
+
 import textwrap
+
+import settings
 
 def download_model(url: str, dest_path: str, retries: int = 3, timeout: int = 30) -> None:
     if os.path.exists(dest_path):
@@ -51,10 +55,21 @@ def download_model(url: str, dest_path: str, retries: int = 3, timeout: int = 30
                         print(f"Failed to delete incomplete file: {dest_path} due to {cleanup_error}. Please delete it manually, before trying to install again.\n")
                 raise
 
-def benchmark(mode: str) -> None:
-    subprocess.run(["benchmark_cli.exe", mode], check=True)
+def benchmark(mode: str, environment: settings.Environment) -> None:
+    if environment == settings.Environment.PROD:
+        subprocess.run(["benchmark_cli.exe", mode], check=True)
+    elif environment == settings.Environment.DEV:
+        subprocess.run([sys.executable, "benchmark_cli.py", mode], check=True)
+    else:
+        raise ValueError(f"Invalid environment: '{environment}'. Valid options are: {[env.value for env in settings.Environment]}")
 
 if __name__ == "__main__":
+    environment = sys.argv[1] if len(sys.argv) > 1 else settings.Environment.PROD
+    if environment not in settings.Environment:
+        print(f"Invalid environment: '{environment}'. Valid options are: {[env.value for env in settings.Environment]}")
+        exit(1)
+    environment = settings.Environment(environment)
+
     prototype_message = textwrap.dedent("""
     =================== Personal AI OS Prototype =======================
     This is an early release. Solid, but still evolving. Explore freely!
@@ -72,10 +87,10 @@ if __name__ == "__main__":
             os.makedirs("models/", exist_ok=True)
             download_model(MODEL_URL, DEST_PATH)
 
-    benchmark("cpu")
+    benchmark("cpu", environment)
     print("\nCPU benchmark completed.")
 
-    benchmark("gpu")
+    benchmark("gpu", environment)
     print("\nGPU benchmark completed.")
 
     input("\nPress any key to exit...")

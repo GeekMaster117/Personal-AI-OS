@@ -1,17 +1,24 @@
+import sys
 import subprocess
 
 from collections import defaultdict
 
 from typing import Any
 
+import settings
 from Include.service.parser_service import ParserService
 
 class Parser:
-    def __init__(self):
+    def __init__(self, environment: settings.Environment):
+        self._service: ParserService | None = None
         try:
-            self._service = ParserService()
+            self._service = ParserService(environment)
         except Exception as e:
             raise RuntimeError(f"Error initialising parser service: {e}")
+        
+    def __del__(self):
+        if self._service is not None:
+            del self._service
         
     def _merge_sort(self, list1: list, list2: list) -> list:
         result = []
@@ -55,7 +62,7 @@ class Parser:
         if action == "start":
             preprocess_data = self._service.extract_app(arguments[0])
             if preprocess_data is None:
-                raise ValueError(f"Could not find app {arguments[0]}. Try having the app open, with observe module running in background.")
+                raise ValueError(f"Could not find app/nickname/class {arguments[0]}. Try having the app open, running in background.")
             
             executable_path = self._service.get_executablepath(preprocess_data)
             arguments[0] = executable_path
@@ -251,31 +258,45 @@ class Parser:
         # Postprocess after action execution
         self._postprocess(action, preprocess_data)
 
-try:
-    parser = Parser()
-except Exception as e:
-    print(f"Error initialising parser: {e}")
-    print("-----------------------------")
-    exit(1)
+if __name__ == "__main__":
+    environment = sys.argv[1] if len(sys.argv) > 1 else settings.Environment.PROD
+    if environment not in settings.Environment:
+        print(f"Invalid environment: '{environment}'. Valid options are: {[env.value for env in settings.Environment]}")
+        exit(1)
+    environment = settings.Environment(environment)
 
-query: str = input("Enter request: ")
-print("-----------------------------")
-
-action: str | None = None
-while True:
     try:
-        action, arguments = parser.extract_action_arguments(query)
-
-        if action:
-            break
-
-        print("Skipped request")
-        print("-----------------------------")
+        parser = Parser(environment)
     except Exception as e:
-        print(f"Error parsing query: {e}")
+        print(f"Error initialising parser: {e}")
         print("-----------------------------")
 
-    query = input(f"Enter request: ")
+        exit(1)
+
+    query: str = input("Enter request: ")
     print("-----------------------------")
 
-parser.execute_action(action, arguments)
+    action: str | None = None
+    while True:
+        try:
+            action, arguments = parser.extract_action_arguments(query)
+
+            if action:
+                break
+
+            print("Skipped request")
+            print("-----------------------------")
+        except Exception as e:
+            print(f"Error parsing query: {e}")
+            print("-----------------------------")
+
+        query = input(f"Enter request: ")
+        print("-----------------------------")
+
+    try:
+        parser.execute_action(action, arguments)
+    except Exception as e:
+        print(f"Error executing action: {e}")
+        print("-----------------------------")
+
+    del parser

@@ -1,6 +1,12 @@
 import os
 
+from enum import Enum
+
 from datetime import timedelta
+
+class Environment(Enum):
+    PROD: str = "prod"
+    DEV: str = "dev"
 
 tick: timedelta = timedelta(seconds=30)
 time_threshold: timedelta = timedelta(minutes=3)
