@@ -10,8 +10,9 @@ def verify_installation() -> None:
         raise FileNotFoundError("Configuration file 'device_config.json' not found.")
 
     with open('device_config.json', 'r') as file:
-        device_config = json.load(file)
         try:
+            device_config = json.load(file)
+
             cpu_optimal_batchsize: int = device_config["cpu_optimal_batchsize"]
             gpu_optimal_batchsize: int = device_config["gpu_optimal_batchsize"]
 
