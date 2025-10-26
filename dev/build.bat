@@ -18,7 +18,11 @@ del /q AI_OS.spec
 echo Building .exe with PyInstaller...
 pyinstaller --onedir --name observe ..\src\observe.py --distpath %root% --workpath ..\build\
 pyinstaller --onedir --name reflect ..\src\reflect.py --distpath %root% --workpath ..\build\
-pyinstaller --onedir --name act ..\src\act.py --distpath %root% --workpath ..\build\
+pyinstaller --onedir --name act ..\src\act.py --distpath %root% --workpath ..\build\ ^
+    --hidden-import=sklearn ^
+    --hidden-import=sklearn._cyutility ^
+    --hidden-import=sklearn.pipeline ^
+    --hidden-import=sklearn.feature_extraction.text
 pyinstaller --onedir --name benchmark_cli ..\benchmark_cli.py --distpath %root% --workpath ..\build\ --add-data "..\src\Lib\site-packages\llama_cpp\lib;llama_cpp\lib"
 pyinstaller --onedir --name install ..\install.py --distpath %root% --workpath ..\build\
 
