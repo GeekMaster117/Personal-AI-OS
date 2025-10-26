@@ -35,7 +35,7 @@ class ParserWrapper:
 
         self._observe: subprocess.Popen | None = None
         if environment == settings.Environment.PROD:
-            self._observe = subprocess.Popen(["observe.exe"])
+            self._observe = subprocess.Popen(["observe.exe"], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         elif environment == settings.Environment.DEV:
             self._observe = subprocess.Popen([sys.executable, "src/observe.py"], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         else:

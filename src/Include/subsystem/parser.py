@@ -1,12 +1,16 @@
-import sys
 import subprocess
 
+from enum import Enum
 from collections import defaultdict
 
 from typing import Any
 
 import settings
 from Include.service.parser_service import ParserService
+
+class ExitCodes(Enum):
+    EXIT = -1
+    CONTINUE = 0
 
 class Parser:
     def __init__(self, environment: settings.Environment):
@@ -40,19 +44,20 @@ class Parser:
 
         return result
     
-    def _handle_parseraction(self, action: str, arguments: list[str]) -> bool:
+    def _handle_parseraction(self, action: str, arguments: list[str]) -> ExitCodes | None:
         # Handle special parser actions, and return if action is handled
 
-        return_value = True
+        exit_code: ExitCodes | None = ExitCodes.CONTINUE
 
         if action == "exit":
             print("Exiting application...")
             print("-----------------------------")
-            exit(0)
+            
+            exit_code = ExitCodes.EXIT
         else:
-            return_value = False
+            exit_code = None
 
-        return return_value
+        return exit_code
     
     def _preprocess_arguments(self, action: str, arguments: list[str]) -> Any:
         # Preprocess arguments based on action type, and returns any data needed for later
@@ -226,7 +231,7 @@ class Parser:
 
         return action, arguments
     
-    def execute_action(self, action : str, arguments: list[str]) -> None:
+    def execute_action(self, action : str, arguments: list[str]) -> ExitCodes:
         try:
             arguments_count = self._service.get_arguments_count(action)
         except Exception as e:
@@ -236,12 +241,12 @@ class Parser:
             raise ValueError(f"Invalid arguments count. Expected {arguments_count}, got {len(arguments)}")
         
         # Handle special parser actions
-        if self._handle_parseraction(action, arguments):
-            return
+        if (exit_code := self._handle_parseraction(action, arguments)) is not None:
+            return exit_code
 
         # Check if action can be executed
         if not self._service.canrun_action(action):
-            return
+            return ExitCodes.CONTINUE
         
         # Preprocess action and arguments before execution
         preprocess_data = self._preprocess_arguments(action, arguments)
@@ -257,3 +262,5 @@ class Parser:
 
         # Postprocess after action execution
         self._postprocess(action, preprocess_data)
+
+        return ExitCodes.CONTINUE

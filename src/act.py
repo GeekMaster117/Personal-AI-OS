@@ -1,9 +1,20 @@
 import sys
 
+import textwrap
+
 import settings
+from Include.subsystem.parser import ExitCodes
 from Include.subsystem.parser import Parser
 
+prototype_message = textwrap.dedent("""
+=================== Personal AI OS Prototype =======================
+This is an early release. Solid, but still evolving. Explore freely!
+====================================================================
+""")
+
 if __name__ == "__main__":
+    print(prototype_message)
+
     environment = sys.argv[1] if len(sys.argv) > 1 else settings.Environment.PROD
     if environment not in settings.Environment:
         print(f"Invalid environment: '{environment}'. Valid options are: {[env.value for env in settings.Environment]}")
@@ -18,30 +29,29 @@ if __name__ == "__main__":
 
         exit(1)
 
-    query: str = input("Enter request: ")
-    print("-----------------------------")
-
-    action: str | None = None
     while True:
+        query: str = input("Enter request: ")
+        print("-----------------------------")
+
         try:
             action, arguments = parser.extract_action_arguments(query)
 
-            if action:
-                break
+            if not action:
+                print("Skipped request")
+                print("-----------------------------")
 
-            print("Skipped request")
-            print("-----------------------------")
+                continue
         except Exception as e:
             print(f"Error parsing query: {e}")
             print("-----------------------------")
 
-        query = input(f"Enter request: ")
-        print("-----------------------------")
+            continue
 
-    try:
-        parser.execute_action(action, arguments)
-    except Exception as e:
-        print(f"Error executing action: {e}")
-        print("-----------------------------")
+        try:
+            if parser.execute_action(action, arguments) == ExitCodes.EXIT:
+                break
+        except Exception as e:
+            print(f"Error executing action: {e}")
+            print("-----------------------------")
 
     del parser
