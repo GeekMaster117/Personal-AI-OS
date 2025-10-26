@@ -55,3 +55,5 @@ if __name__ == "__main__":
             print("-----------------------------")
 
     del parser
+
+    input("\nPress any key to exit...")
