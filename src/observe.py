@@ -7,14 +7,13 @@ import settings
 from Include.subsystem.usagedata_db import UsagedataDB
 
 shutdown_request: bool = False
-app_monitor = AppMonitor()
 
 def shutdown_handler(signum, frame) -> None:
     global shutdown_request
     print("Shutting down...", flush=True)
     shutdown_request = True
 
-def handle_app_data() -> None:
+def handle_app_data(app_monitor: AppMonitor) -> None:
     active_app, active_title = app_monitor.get_active_app_title()
 
     app_title_map, app_executablepath_map = app_monitor.get_all_apps_titles_executablepaths()
@@ -26,22 +25,26 @@ prototype_message = textwrap.dedent("""
 This is an early release. Solid, but still evolving. Explore freely!
 ====================================================================
 """)
-print(prototype_message)
 
-usagedataDB = UsagedataDB(settings.usagedata_dir)
-signal.signal(signal.SIGINT, shutdown_handler)
-signal.signal(signal.SIGTERM, shutdown_handler)
+if __name__ == "__main__":
+    print(prototype_message)
 
-sleep_interval = 1
+    app_monitor = AppMonitor()
 
-print("Press Ctrl+C to stop")
+    usagedataDB = UsagedataDB(settings.usagedata_dir)
+    signal.signal(signal.SIGINT, shutdown_handler)
+    signal.signal(signal.SIGTERM, shutdown_handler)
 
-while not shutdown_request:
-    handle_app_data()
+    sleep_interval = 1
 
-    elapsed_time = 0
-    while elapsed_time < settings.tick.total_seconds() and not shutdown_request:
-        time.sleep(sleep_interval)
-        elapsed_time += sleep_interval
+    print("Press Ctrl+C to stop")
 
-input("\nPress any key to exit...")
+    while not shutdown_request:
+        handle_app_data(app_monitor)
+
+        elapsed_time = 0
+        while elapsed_time < settings.tick.total_seconds() and not shutdown_request:
+            time.sleep(sleep_interval)
+            elapsed_time += sleep_interval
+
+    input("\nPress any key to exit...")

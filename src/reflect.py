@@ -7,14 +7,6 @@ from Include.subsystem.suggestion_engine import SuggestionEngine
 from Include.service.suggestion_engine_service import SuggestionType
 from Include.verify_install import verify_installation
 
-try:
-    verify_installation()
-except Exception as e:
-    print(f"Installation verification failed: {e}\nPlease run install.exe")
-
-    input("\nPress any key to exit...")
-    exit(1)
-
 class ExitCodes(Enum):
     EXIT = -1
     CONTINUE = 0
@@ -97,26 +89,36 @@ prototype_message = textwrap.dedent("""
 This is an early release. Solid, but still evolving. Explore freely!
 ====================================================================
 """)
-print(prototype_message)
 
-usagedataDB = UsagedataDB(settings.usagedata_dir)
-try:
-    suggestion_engine = SuggestionEngine(usagedataDB)
-except Exception as e:
-    print(f"\nError initialising SuggestionEngine: {e}")
+if __name__ == "__main__":
+    print(prototype_message)
+
+    try:
+        verify_installation()
+    except Exception as e:
+        print(f"Installation verification failed: {e}\nPlease run install.exe")
+
+        input("\nPress any key to exit...")
+        exit(1)
+
+    usagedataDB = UsagedataDB(settings.usagedata_dir)
+    try:
+        suggestion_engine = SuggestionEngine(usagedataDB)
+    except Exception as e:
+        print(f"\nError initialising SuggestionEngine: {e}")
+
+        input("\nPress any key to exit...")
+        exit(1)
+
+    suggestion_engine.preprocess_logs()
+
+    print("What would you like to get?")
+
+    try:
+        handle_menu()
+    except Exception as e:
+        print(f"Error handling reflect: {e}")
+
+    suggestion_engine.close()
 
     input("\nPress any key to exit...")
-    exit(1)
-
-suggestion_engine.preprocess_logs()
-
-print("What would you like to get?")
-
-try:
-    handle_menu()
-except Exception as e:
-    print(f"Error handling reflect: {e}")
-
-suggestion_engine.close()
-
-input("\nPress any key to exit...")
