@@ -213,7 +213,7 @@ pyvenv.cfg
 data/
 models/
 cache/
-*.bin
+bin/
 
 # Custom Ignore Files
 device_config.json
