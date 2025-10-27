@@ -1,6 +1,8 @@
+import os
+import shutil
+
 import json
 from pathlib import Path
-import shutil
 
 import joblib
 
@@ -107,7 +109,7 @@ def make_keywordmaps_pipelines(commands: dict) -> tuple[dict[str, set[str]], dic
 
     return keyword_action_map, keyword_argument_maps, action_pipeline, argument_pipelines
 
-commands = load_commands("dev/commands.json")
+commands = load_commands(os.path.join("dev", "commands.json"))
 keyword_action_map, keyword_argument_maps, action_pipeline, argument_pipelines = make_keywordmaps_pipelines(commands)
 
 clear_directory(settings.parser_dir)

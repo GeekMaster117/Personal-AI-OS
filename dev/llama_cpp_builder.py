@@ -56,12 +56,7 @@ class LlamaCPPBuilder:
         return shutil.which("nvcc") is not None
         
     def _check_cmake(self):
-        try:
-            result = subprocess.run(['cmake', '--version'], capture_output=True, text=True)
-            return result.returncode == 0
-        except Exception as e:
-            print(f"Error checking cmake: {e}")
-            return False
+        return shutil.which("cmake") is not None
         
     def _check_devterminal(self) -> bool:
         if self.os_name != LlamaCPPBuilder.SupportedOS.WINDOWS:
@@ -80,12 +75,7 @@ class LlamaCPPBuilder:
         return False
         
     def _check_git(self) -> bool:
-        try:
-            result = subprocess.run(['git', '--version'], capture_output=True, text=True)
-            return result.returncode == 0
-        except Exception as e:
-            print(f"Error checking git: {e}")
-            return False
+        return shutil.which("git") is not None
 
     def _clone_repo(self, repo_url, repo_dir) -> None:
         if os.path.exists(repo_dir):
