@@ -19,7 +19,7 @@ fetch_all_apps_titles_dir: str = os.path.join(sql_dir, "fetch_all_apps_titles.sq
 library_dir: str = "bin"
 
 cache_dir: str = "cache"
-model_dir: str = "models/Phi-3-mini-4k-instruct-q4.gguf"
+model_dir: str = os.path.join("models", "Phi-3-mini-4k-instruct-q4.gguf")
 
 parser_dir: str = os.path.join(library_dir, "parser")
 
