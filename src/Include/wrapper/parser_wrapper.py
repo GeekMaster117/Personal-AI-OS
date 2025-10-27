@@ -513,7 +513,7 @@ class ParserWrapper:
     def get_argument_indices_for_keyword(self, action: str, argument_keyword: str) -> set[int]:
         # Fetches all arguments for an argument keyword
 
-        return self._get_keyword_argument_map().get(argument_keyword, set())
+        return self._get_keyword_argument_map(action).get(argument_keyword, set())
 
     def get_required_arguments(self, action: str) -> list[int]:
         # Fetches required arguments for an action
