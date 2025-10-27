@@ -3,11 +3,14 @@ import psutil
 import win32api
 import os
 
+import settings
 import Include.filter.app_title_blacklist as blacklist
 import Include.map.system_executable_map as system_executable_map
 
 class AppMonitor:
-    def __init__(self) -> None:
+    def __init__(self, os_name: settings.SupportedOS) -> None:
+        self.os_name = os_name
+
         self._app_cache: dict[str, str] = dict()
 
     def _is_executable_blacklisted(self, executable: str) -> bool:
@@ -117,3 +120,4 @@ class AppMonitor:
         app = self._get_app(executable, executable_path)
 
         return app, title
+    

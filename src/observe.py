@@ -1,5 +1,8 @@
-import time
 import signal
+import platform
+
+import time
+
 import textwrap
 
 from Include.app_monitor import AppMonitor
@@ -29,7 +32,12 @@ This is an early release. Solid, but still evolving. Explore freely!
 if __name__ == "__main__":
     print(prototype_message)
 
-    app_monitor = AppMonitor()
+    os_name = platform.system()
+    if os_name not in settings.SupportedOS:
+        raise NotImplementedError(f"Unsupported operating system: {os_name}")
+    os_name = settings.SupportedOS(os_name)
+
+    app_monitor = AppMonitor(os_name)
 
     usagedataDB = UsagedataDB(settings.usagedata_dir)
     signal.signal(signal.SIGINT, shutdown_handler)
