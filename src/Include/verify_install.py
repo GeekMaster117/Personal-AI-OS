@@ -1,15 +1,17 @@
-import settings
 import os
+
 import json
+
+import settings
 
 def verify_installation() -> None:
     if not settings.model_dir:
         raise ValueError("Model .gguf file not found.")
     
-    if not os.path.exists('device_config.json'):
-        raise FileNotFoundError("Configuration file 'device_config.json' not found.")
+    if not os.path.exists(settings.device_config_dir):
+        raise FileNotFoundError(f"Configuration file '{settings.device_config_dir}' not found.")
 
-    with open('device_config.json', 'r') as file:
+    with open(settings.device_config_dir, 'r') as file:
         try:
             device_config = json.load(file)
 

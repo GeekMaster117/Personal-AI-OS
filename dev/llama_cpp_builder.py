@@ -2,25 +2,17 @@ import subprocess
 import os
 import shutil
 import platform
-from enum import Enum
+
 from pathlib import Path
 
-class LlamaCPPBuilder:
-    class SupportedOS(Enum):
-        WINDOWS = "Windows"
-        LINUX = "Linux"
-        MACOS = "Darwin"
+import settings
 
+class LlamaCPPBuilder:
     def __init__(self):
         os_name = platform.system()
-        if os_name == "Windows":
-            self.os_name = LlamaCPPBuilder.SupportedOS.WINDOWS
-        elif os_name == "Linux":
-            self.os_name = LlamaCPPBuilder.SupportedOS.LINUX
-        elif os_name == "Darwin":
-            self.os_name = LlamaCPPBuilder.SupportedOS.MACOS
-        else:
+        if os_name not in settings.SupportedOS:
             raise NotImplementedError(f"Unsupported operating system: {os_name}")
+        self.os_name = settings.SupportedOS(os_name)
 
         self.supports_gpu_acceleration = self._check_gpu_acceleration()
         
@@ -59,7 +51,7 @@ class LlamaCPPBuilder:
         return shutil.which("cmake") is not None
         
     def _check_devterminal(self) -> bool:
-        if self.os_name != LlamaCPPBuilder.SupportedOS.WINDOWS:
+        if self.os_name != settings.SupportedOS.WINDOWS:
             return True  # Developer Terminal is only relevant for Windows
 
         candidates = [
@@ -128,7 +120,7 @@ class LlamaCPPBuilder:
                     ".."
                 ]
 
-        if self.os_name == LlamaCPPBuilder.SupportedOS.WINDOWS:
+        if self.os_name == settings.SupportedOS.WINDOWS:
             cmake_command = f'"{self.devterminal_dir}" && ' + ' '.join(cmake_command)
             subprocess.check_call(cmake_command, cwd=build_dir, shell=True)
         else:
@@ -144,7 +136,7 @@ class LlamaCPPBuilder:
             "Release"
         ]
 
-        if self.os_name == LlamaCPPBuilder.SupportedOS.WINDOWS:
+        if self.os_name == settings.SupportedOS.WINDOWS:
             build_command = f'"{self.devterminal_dir}" && ' + ' '.join(build_command)
             subprocess.check_call(cmake_command, cwd=build_dir, shell=True)
         else:

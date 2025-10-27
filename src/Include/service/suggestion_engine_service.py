@@ -1,10 +1,12 @@
 import os
 import json
 import threading
-import textwrap
-from enum import Enum
-import settings
 
+import textwrap
+
+from enum import Enum
+
+import settings
 from Include.wrapper.llama_wrapper import LlamaCPP
 from Include.loading_spinner import loading_spinner
 
@@ -15,12 +17,12 @@ class SuggestionType(Enum):
 
 class SuggestionEngineService:
     def __init__(self):
-        if not os.path.exists('device_config.json'):
-            raise FileNotFoundError("Configuration file 'device_config.json' not found. Please run the benchmark first.")
+        if not os.path.exists(settings.device_config_dir):
+            raise FileNotFoundError(f"Configuration file '{settings.device_config_dir}' not found. Please run the benchmark first.")
 
         cpu_optimal_batchsize = None
         gpu_optimal_batchsize = None
-        with open('device_config.json', 'r') as file:
+        with open(settings.device_config_dir, 'r') as file:
             device_config = json.load(file)
             try:
                 cpu_optimal_batchsize: int = device_config["cpu_optimal_batchsize"]

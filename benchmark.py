@@ -1,6 +1,7 @@
 import os
 import json
 
+import settings
 from src.Include.wrapper.llama_wrapper import LlamaCPP
 
 class Benchmark:
@@ -9,8 +10,8 @@ class Benchmark:
     batch_sizes = [4, 8, 16, 32, 64, 128]
 
     def _save_config(key, value):
-        if os.path.exists('device_config.json'):
-            with open('device_config.json', "r") as f:
+        if os.path.exists(settings.device_config_dir):
+            with open(settings.device_config_dir, "r") as f:
                 try:
                     config = json.load(f)
                 except json.JSONDecodeError:
@@ -19,7 +20,7 @@ class Benchmark:
             config = {}
 
         config[key] = value
-        with open('device_config.json', "w") as f:
+        with open(settings.device_config_dir, "w") as f:
             json.dump(config, f)
 
     def config_cpu_optimal_batchsize() -> None:
