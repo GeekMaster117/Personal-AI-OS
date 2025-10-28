@@ -283,7 +283,7 @@ class LlamaCPP:
                 first_chunk = False
                 print("LLM: ", end='', flush=True)
 
-            content = chunk["choices"]['text'] # type: ignore Chunk is CreateCompletionResponse, Pylance treating it like string
+            content = chunk["choices"][0]['text'] # type: ignore Chunk is CreateCompletionResponse, Pylance treating it like string
             print(content, end='', flush=True)
         print()
 
