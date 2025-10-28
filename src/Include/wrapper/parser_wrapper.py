@@ -308,9 +308,11 @@ class ParserWrapper:
 
         if len(self._get_commands()) <= 1:
             raise RuntimeError("Action pipeline cannot be trained on less then 2 actions")
+        
+        action_pipeline = self._get_action_pipeline()
 
-        X = self._get_action_pipeline().named_steps["countvectorizer"].transform([" ".join(action_keywords)])
-        self._get_action_pipeline().named_steps["sgdclassifier"].partial_fit(X, [action])
+        X = action_pipeline.named_steps["countvectorizer"].transform([" ".join(action_keywords)])
+        action_pipeline.named_steps["sgdclassifier"].partial_fit(X, [action])
 
         self._save_action_pipeline()
 
@@ -319,9 +321,11 @@ class ParserWrapper:
         
         if len(self._get_commands()[action]['args']) <= 1:
             raise RuntimeError("Argument pipeline cannot be trained on less then 2 arguments")
+        
+        argument_pipeline = self._get_argument_pipeline(action)
 
-        X = self._get_argument_pipeline(action).named_steps["countvectorizer"].transform([" ".join(argument_keywords)])
-        self._get_argument_pipeline(action).named_steps["sgdclassifier"].partial_fit(X, [argument_index])
+        X = argument_pipeline.named_steps["countvectorizer"].transform([" ".join(argument_keywords)])
+        argument_pipeline.named_steps["sgdclassifier"].partial_fit(X, [argument_index])
 
         self._save_argument_pipeline(action)
     
@@ -332,10 +336,12 @@ class ParserWrapper:
 
         if probability_cutoff < 0 or probability_cutoff > 1:
             raise ValueError(f"Probability cutoff must be in the interval [0, 1], value passed: {probability_cutoff}")
+        
+        action_pipeline = self._get_action_pipeline()
 
-        probabilities: ndarray = self._get_action_pipeline().predict_proba([" ".join(action_keywords)])[0]
+        probabilities: ndarray = action_pipeline.predict_proba([" ".join(action_keywords)])[0]
 
-        classes = [(str(self._get_action_pipeline().classes_[idx]), float(probability)) for idx, probability in enumerate(probabilities)]
+        classes = [(str(action_pipeline.classes_[idx]), float(probability)) for idx, probability in enumerate(probabilities)]
         top_actions_max = sorted(classes, reverse=True, key = lambda x: x[1])[:min(len(probabilities), max_possibilities)]
         
         top_actions = []
@@ -358,6 +364,7 @@ class ParserWrapper:
             raise ValueError(f"Probability cutoff must be in the interval [0, 1], value passed: {probability_cutoff}")
         
         argument_pipeline = self._get_argument_pipeline(action)
+        
         probabilities: ndarray = argument_pipeline.predict_proba([" ".join(keywords)])[0]
 
         classes = [(int(argument_pipeline.classes_[idx]), float(probability)) for idx, probability in enumerate(probabilities)]
@@ -381,9 +388,11 @@ class ParserWrapper:
         if probability_cutoff < 0 or probability_cutoff > 1:
             raise ValueError(f"Probability cutoff must be in the interval [0, 1], value passed: {probability_cutoff}")
         
-        probabilities: ndarray = self._get_argument_pipeline(action).predict_proba([" ".join(argument_keywords)])[0]
+        argument_pipeline = self._get_argument_pipeline(action)
+        
+        probabilities: ndarray = argument_pipeline.predict_proba([" ".join(argument_keywords)])[0]
 
-        argument_index = max([(int(self._get_argument_pipeline(action).classes_[idx]), float(probability)) for idx, probability in enumerate(probabilities)])
+        argument_index = max([(int(argument_pipeline.classes_[idx]), float(probability)) for idx, probability in enumerate(probabilities)])
 
         if argument_index[1] < probability_cutoff:
             return None
@@ -478,22 +487,26 @@ class ParserWrapper:
     def has_action_warning(self, action: str) -> bool:
         # Checks and returns if an action has warning set to True.
 
-        if action not in self._get_commands():
+        commands = self._get_commands()
+
+        if action not in commands:
             raise ValueError(f"Action '{action}' not found in commands")
-        if "warning" not in self._get_commands()[action]:
+        if "warning" not in commands[action]:
             raise ValueError(f"Action '{action}' has no warning")
 
-        return self._get_commands()[action]["warning"]
+        return commands[action]["warning"]
     
     def get_action_description(self, action: str) -> str:
         # Fetches description of an action.
 
-        if action not in self._get_commands():
+        commands = self._get_commands()
+
+        if action not in commands:
             raise ValueError(f"Action '{action}' not found in commands")
-        if "description" not in self._get_commands()[action]:
+        if "description" not in commands:
             raise ValueError(f"Action '{action}' has no description")
 
-        return self._get_commands()[action]["description"]
+        return commands[action]["description"]
 
     def get_action_keywords(self) -> KeysView[str]:
         # Fetches all action keywords.
@@ -526,12 +539,14 @@ class ParserWrapper:
     def get_required_arguments(self, action: str) -> list[int]:
         # Fetches required arguments for an action
 
-        if action not in self._get_commands():
+        commands = self._get_commands()
+
+        if action not in commands:
             raise ValueError(f"Action '{action}' not found in commands")
-        if "args" not in self._get_commands()[action]:
+        if "args" not in commands[action]:
             raise ValueError(f"Action '{action}' has no arguments")
         
-        all_arguments: list[dict] = self._get_commands()[action]["args"]
+        all_arguments: list[dict] = commands[action]["args"]
         
         indices = []
         for i in range(len(all_arguments)):
@@ -546,12 +561,14 @@ class ParserWrapper:
     def get_optional_arguments(self, action: str) -> list[int]:
         # Fetches optional arguments for an action
 
-        if action not in self._get_commands():
+        commands = self._get_commands()
+
+        if action not in commands:
             raise ValueError(f"Action '{action}' not found in commands")
-        if "args" not in self._get_commands()[action]:
+        if "args" not in commands[action]:
             raise ValueError(f"Action '{action}' has no arguments")
         
-        all_arguments: list[dict] = self._get_commands()[action]["args"]
+        all_arguments: list[dict] = commands[action]["args"]
         
         indices = []
         for i in range(len(all_arguments)):
@@ -568,40 +585,51 @@ class ParserWrapper:
 
         if idx >= (arguments_count := self.get_arguments_count(action)) or idx < 0:
             raise ValueError(f"Index out of bounds, index given: {idx} arguments available: {arguments_count}")
-        if "type" not in self._get_commands()[action]["args"][idx]:
+        
+        commands = self._get_commands()
+
+        if "type" not in commands[action]["args"][idx]:
             raise ValueError(f"Argument: '{idx}' for Action '{action}' has no type")
 
-        return self._get_commands()[action]["args"][idx]["type"]
+        return commands[action]["args"][idx]["type"]
     
     def get_argument_format(self, action: str, idx: int) -> str:
         # Fetches format of an argument.
 
         if idx >= (arguments_count := self.get_arguments_count(action)) or idx < 0:
             raise ValueError(f"Index out of bounds, index given: {idx} arguments available: {arguments_count}")
-        if "format" not in self._get_commands()[action]["args"][idx]:
+        
+        commands = self._get_commands()
+
+        if "format" not in commands[action]["args"][idx]:
             raise ValueError(f"Argument: '{idx}' for Action '{action}' has no format")
         
-        return self._get_commands()[action]["args"][idx]["format"]
+        return commands[action]["args"][idx]["format"]
     
     def get_argument_description(self, action: str, idx: int) -> str:
         # Fetches type of an argument
 
         if idx >= (arguments_count := self.get_arguments_count(action)) or idx < 0:
             raise ValueError(f"Index out of bounds, index given: {idx} arguments available: {arguments_count}")
-        if "description" not in self._get_commands()[action]["args"][idx]:
+        
+        commands = self._get_commands()
+
+        if "description" not in commands[action]["args"][idx]:
             raise ValueError(f"Argument: '{idx}' for Action '{action}' has no description")
         
-        return self._get_commands()[action]["args"][idx]["description"]
+        return commands[action]["args"][idx]["description"]
     
     def get_arguments_count(self, action: str) -> int:
         # Fetched no.of arguments available for an action.
 
-        if action not in self._get_commands():
+        commands = self._get_commands()
+
+        if action not in commands:
             raise ValueError(f"Action '{action}' not found in commands")
-        if "args" not in self._get_commands()[action]:
+        if "args" not in commands[action]:
             raise ValueError(f"Action '{action}' has no arguments")
         
-        return len(self._get_commands()[action]["args"])
+        return len(commands[action]["args"])
     
     def get_existing_apps(self) -> KeysView[str]:
         # Fetches all apps that have been used before
@@ -628,18 +656,22 @@ class ParserWrapper:
     def get_app_for_nickname(self, nickname: str) -> str:
         # Fetches app for a nickname
 
-        if nickname not in self._get_nickname_app_map():
+        nickname_app_map = self._get_nickname_app_map()
+
+        if nickname not in nickname_app_map:
             raise ValueError(f"Nickname {nickname} not found in nickname app map")
 
-        return self._get_nickname_app_map()[nickname]
+        return nickname_app_map[nickname]
     
     def get_executablepath(self, app: str) -> str:
         # Fetches executable path for app
 
-        if app not in self._get_app_executablepath_map():
+        app_executablepath_map = self._get_app_executablepath_map()
+
+        if app not in app_executablepath_map:
             raise ValueError(f"App {app} not found in app executable path map")
         
-        return self._get_app_executablepath_map()[app]
+        return app_executablepath_map[app]
     
     def get_classes(self) -> KeysView[str]:
         # Fetches all classes
@@ -649,7 +681,9 @@ class ParserWrapper:
     def get_mostused_app_for_class(self, class_name: str) -> str | None:
         # Fetches app for a class
 
-        if class_name not in self._get_class_app_map():
+        class_app_map = self._get_class_app_map()
+
+        if class_name not in class_app_map:
             raise ValueError(f"Class {class_name} not found in nickname app map")
         
-        return self._usagedata_db.get_mostused_app(tuple(self._get_class_app_map()[class_name]))
+        return self._usagedata_db.get_mostused_app(tuple(class_app_map[class_name]))
