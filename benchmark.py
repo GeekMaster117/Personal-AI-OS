@@ -1,6 +1,8 @@
 import os
 import json
 
+from typing import Any
+
 import settings
 from src.Include.wrapper.llama_wrapper import LlamaCPP
 
@@ -9,7 +11,8 @@ class Benchmark:
     max_tokens = 50
     batch_sizes = [4, 8, 16, 32, 64, 128]
 
-    def _save_config(key, value):
+    @staticmethod
+    def _save_config(key: Any, value: Any):
         if os.path.exists(settings.device_config_dir):
             with open(settings.device_config_dir, "r") as f:
                 try:
@@ -23,6 +26,7 @@ class Benchmark:
         with open(settings.device_config_dir, "w") as f:
             json.dump(config, f)
 
+    @staticmethod
     def config_cpu_optimal_batchsize() -> None:
         print("Running CPU benchmark...", flush=True)
 
@@ -52,6 +56,7 @@ class Benchmark:
 
         Benchmark._save_config("cpu_optimal_batchsize", best_batchsize)
 
+    @staticmethod
     def config_gpu_optimal_batchsize() -> None:
         print("Running GPU benchmark...", flush=True)
 

@@ -41,7 +41,7 @@ class AppMonitor:
     
     def _get_app_api(self, executable_path: str) -> str | None:
         try:
-            return win32api.GetFileVersionInfo(executable_path, "\\StringFileInfo\\040904b0\\ProductName").lower()
+            return str(win32api.GetFileVersionInfo(executable_path, "\\StringFileInfo\\040904b0\\ProductName")).lower()
         except Exception:
             return None
         
@@ -77,7 +77,11 @@ class AppMonitor:
         app_title_map: dict[str, set[str]] = dict()
 
         for window in pywinctl.getAllWindows():
-            executable_path: str = self._get_executable_path(window.getPID())
+            pid: int | None = window.getPID()
+            if pid is None:
+                continue
+
+            executable_path: str = self._get_executable_path(pid)
             if not executable_path:
                 continue
 
@@ -98,26 +102,29 @@ class AppMonitor:
 
         return app_title_map, app_executablepath_map
 
-    def get_active_app_title(self) -> tuple[str, str, str] | tuple[None, None, None]:
-        # Fetches active app and title, with executable name
+    def get_active_app_title(self) -> tuple[str, str] | tuple[None, None]:
+        # Fetches active app and title
 
         active_window = pywinctl.getActiveWindow()
         if not active_window:
-            return None, None, None
+            return None, None
         
-        executable_path: str = self._get_executable_path(active_window.getPID())
+        pid: int | None = active_window.getPID()
+        if pid is None:
+            return None, None
+        
+        executable_path: str = self._get_executable_path(pid)
         if not executable_path:
-            return None, None, None
+            return None, None
 
         executable: str = os.path.basename(executable_path)
         if not executable or self._is_executable_blacklisted(executable):
-            return None, None, None
+            return None, None
         
         title: str = active_window.title.strip()
         if not title or self._is_title_blacklisted(title, executable):
-            return None, None, None
+            return None, None
         
         app = self._get_app(executable, executable_path)
 
         return app, title
-    

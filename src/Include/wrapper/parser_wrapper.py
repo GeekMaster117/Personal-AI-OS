@@ -19,14 +19,14 @@ class ParserWrapper:
     def __init__(self, environment: settings.Environment):
         self._commands: dict | None = None
 
-        self._keyword_action_map: dict | None = None
+        self._keyword_action_map: dict[str, set[str]] | None = None
         self._action_pipeline: Any | None = None
-        self._keyword_argument_maps: dict = dict()
-        self._argument_pipelines: dict[dict] = dict()
+        self._keyword_argument_maps: dict[str, dict[str, set[str]]] = dict()
+        self._argument_pipelines: dict[str, Any] = dict()
 
-        self._app_executablepath_map: dict | None = None
-        self._class_app_map: dict | None = None
-        self._nickname_app_map: dict | None = None
+        self._app_executablepath_map: dict[str, str] | None = None
+        self._class_app_map: dict[str, set[str]] | None = None
+        self._nickname_app_map: dict[str, str] | None = None
 
         self._apps_with_nicknames: set | None = None
         self._apps_in_class: set | None = None
@@ -188,7 +188,7 @@ class ParserWrapper:
         # Checks if commands is available in memory else loads from file
 
         if self._commands is None:
-            self._commands: dict = self._load_commands()
+            self._commands = self._load_commands()
         
         return self._commands
     
@@ -196,7 +196,7 @@ class ParserWrapper:
         # Checks if keyword action map is available in memory else loads from file
 
         if self._keyword_action_map is None:
-            self._keyword_action_map: dict = self._load_keyword_map()
+            self._keyword_action_map = self._load_keyword_map()
 
         return self._keyword_action_map
     
@@ -306,7 +306,7 @@ class ParserWrapper:
     def train_action_pipeline(self, action_keywords: list[str], action: str) -> None:
         # Trains action pipeline
 
-        if len(self._commands) <= 1:
+        if len(self._get_commands()) <= 1:
             raise RuntimeError("Action pipeline cannot be trained on less then 2 actions")
 
         X = self._get_action_pipeline().named_steps["countvectorizer"].transform([" ".join(action_keywords)])
@@ -317,7 +317,7 @@ class ParserWrapper:
     def train_argument_pipeline(self, action: str, argument_keywords: list[str], argument_index: int) -> None:
         # Trains argument pipeline
         
-        if len(self._commands[action]['args']) <= 1:
+        if len(self._get_commands()[action]['args']) <= 1:
             raise RuntimeError("Argument pipeline cannot be trained on less then 2 arguments")
 
         X = self._get_argument_pipeline(action).named_steps["countvectorizer"].transform([" ".join(argument_keywords)])
@@ -387,7 +387,7 @@ class ParserWrapper:
 
         if argument_index[1] < probability_cutoff:
             return None
-        return argument_index
+        return argument_index[0]
     
     def match_action_keyword(self, token: str, probability_cutoff: float) -> str | None:
         # Matches token with action keywords using fuzzy matching.
@@ -508,12 +508,20 @@ class ParserWrapper:
     def get_actions_for_keyword(self, action_keyword: str) -> set[str]:
         # Fetches all action for an action_keyword
 
-        return self._get_keyword_action_map().get(action_keyword, set())
+        keyword_action_map = self._get_keyword_action_map()
+        if action_keyword not in keyword_action_map:
+            raise ValueError(f"Action keyword '{action_keyword}' not found in keyword action map")
+
+        return keyword_action_map[action_keyword]
     
     def get_argument_indices_for_keyword(self, action: str, argument_keyword: str) -> set[int]:
         # Fetches all arguments for an argument keyword
 
-        return self._get_keyword_argument_map(action).get(argument_keyword, set())
+        keyword_argument_map = self._get_keyword_argument_map(action)
+        if argument_keyword not in keyword_argument_map:
+            raise ValueError(f"Argument keyword '{argument_keyword}' not found in keyword argument map for action '{action}'")
+
+        return keyword_argument_map.get(argument_keyword, set())
 
     def get_required_arguments(self, action: str) -> list[int]:
         # Fetches required arguments for an action
@@ -558,8 +566,8 @@ class ParserWrapper:
     def get_argument_type(self, action: str, idx: int) -> str:
         # Fetches type of an argument
 
-        if idx < 0 or idx >= self.get_arguments_count(action):
-            raise ValueError(f"Index out of bounds, index given: {idx} arguments available: {self.get_arguments_count()}")
+        if idx >= (arguments_count := self.get_arguments_count(action)) or idx < 0:
+            raise ValueError(f"Index out of bounds, index given: {idx} arguments available: {arguments_count}")
         if "type" not in self._get_commands()[action]["args"][idx]:
             raise ValueError(f"Argument: '{idx}' for Action '{action}' has no type")
 
@@ -568,8 +576,8 @@ class ParserWrapper:
     def get_argument_format(self, action: str, idx: int) -> str:
         # Fetches format of an argument.
 
-        if idx < 0 or idx >= self.get_arguments_count(action):
-            raise ValueError(f"Index out of bounds, index given: {idx} arguments available: {self.get_arguments_count()}")
+        if idx >= (arguments_count := self.get_arguments_count(action)) or idx < 0:
+            raise ValueError(f"Index out of bounds, index given: {idx} arguments available: {arguments_count}")
         if "format" not in self._get_commands()[action]["args"][idx]:
             raise ValueError(f"Argument: '{idx}' for Action '{action}' has no format")
         
@@ -578,8 +586,8 @@ class ParserWrapper:
     def get_argument_description(self, action: str, idx: int) -> str:
         # Fetches type of an argument
 
-        if idx < 0 or idx >= self.get_arguments_count(action):
-            raise ValueError(f"Index out of bounds, index given: {idx} arguments available: {self.get_arguments_count()}")
+        if idx >= (arguments_count := self.get_arguments_count(action)) or idx < 0:
+            raise ValueError(f"Index out of bounds, index given: {idx} arguments available: {arguments_count}")
         if "description" not in self._get_commands()[action]["args"][idx]:
             raise ValueError(f"Argument: '{idx}' for Action '{action}' has no description")
         

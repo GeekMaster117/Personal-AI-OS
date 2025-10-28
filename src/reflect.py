@@ -1,5 +1,8 @@
 from enum import Enum
+
 import textwrap
+
+from typing import Any
 
 import settings
 from Include.subsystem.usagedata_db import UsagedataDB
@@ -14,7 +17,7 @@ class ExitCodes(Enum):
 def exit_program() -> ExitCodes:
     return ExitCodes.EXIT
 
-def handle_options(options: list[str]) -> int:
+def handle_options(options: list[Any]) -> int:
     while True:
         for i, option in enumerate(options, start=1):
             print(f"{i}. {option[0]}")

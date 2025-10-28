@@ -6,8 +6,8 @@ from datetime import timedelta
 
 # Stage environments
 class Environment(Enum):
-    PROD: str = "prod"
-    DEV: str = "dev"
+    PROD = "prod"
+    DEV = "dev"
 
 # Supported systems
 supported_arch: set[int] = {61, 75, 86, 89, 120}

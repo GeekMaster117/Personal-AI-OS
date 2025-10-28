@@ -36,7 +36,7 @@ if __name__ == "__main__":
         try:
             action, arguments = parser.extract_action_arguments(query)
 
-            if not action:
+            if action is None or arguments is None:
                 print("Skipped request")
                 print("-----------------------------")
 

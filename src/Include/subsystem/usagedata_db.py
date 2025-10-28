@@ -1,19 +1,20 @@
 import time
 from datetime import datetime, timedelta
+
 from pathlib import Path
+
 from typing import Any
 
-from Include.service.usagedata_service import UsagedataService
-
 import settings
+from Include.service.usagedata_service import UsagedataService
 
 class UsagedataDB:
     def __init__(self, usagedata_dir: str):
-        usagedata_dir: Path = Path(usagedata_dir)
-        usagedata_dir.mkdir(parents=True, exist_ok=True)
+        usagedata: Path = Path(usagedata_dir)
+        usagedata.mkdir(parents=True, exist_ok=True)
 
-        self.db_path: Path = usagedata_dir / "usagedata.db"
-        self._service: UsagedataService = UsagedataService(self.db_path)
+        self.db_path: Path = usagedata / "usagedata.db"
+        self._service: UsagedataService = UsagedataService(str(self.db_path))
 
         self.apps_open: dict[str, set[str]] = dict()
         self.active_app: str | None = None
@@ -28,7 +29,7 @@ class UsagedataDB:
 
     def _ensure_today_log(self) -> None:
         datetime_today: datetime = datetime.today()
-        current_date: datetime.date = datetime_today.date()
+        current_date = datetime_today.date()
         today: str = datetime_today.isoformat()
 
         latest_day: dict | None = self._service.get_latest_daylog(("time_anchor",))
@@ -49,7 +50,7 @@ class UsagedataDB:
     def update_apps(self, app_title_map: dict[str, set[str]], app_executable_path: dict[str, str], active_app: str | None = None, active_title: str | None = None) -> None:
         self._ensure_log_integrity()
 
-        today_log: dict[str, float | int] = self._service.get_latest_daylog()
+        today_log: dict = self._service.get_latest_daylog()
 
         now: float = time.monotonic()
         now_datetime: datetime = datetime.today()
@@ -66,8 +67,8 @@ class UsagedataDB:
             self.apps_open.update(app_title_map)
 
             if active_app and active_title:
-                self.active_app: str = active_app
-                self.active_title: str = active_title
+                self.active_app = active_app
+                self.active_title = active_title
 
             self._service.update_latest_daylog(today_log)
 
@@ -115,8 +116,8 @@ class UsagedataDB:
             self.apps_open.update(app_title_map)
 
             if active_app and active_title:
-                self.active_app: str = active_app
-                self.active_title: str = active_title
+                self.active_app = active_app
+                self.active_title = active_title
 
             today_log["monotonic_last_updated"] = now
 
@@ -127,11 +128,11 @@ class UsagedataDB:
         
         elapsed_time: float = now - today_log["monotonic_last_updated"]
 
-        apps_titles: dict[str, dict[str, int | float | dict[str, str | int | float]]] = self._service.get_latest_applog_titlelog()
+        apps_titles: dict = self._service.get_latest_applog_titlelog()
 
         # Update focus time and count for active app and active title
         if active_app and active_title and active_app in apps_titles:
-            active_app_focus_period: dict[str, dict[int, float]] = self._service.get_latest_appfocusperiod(active_app)
+            active_app_focus_period: dict[int, dict[str, int | float]] = self._service.get_latest_appfocusperiod(active_app)
             if current_hour not in active_app_focus_period:
                 active_app_focus_period[current_hour] = {
                     "focus_duration": 0,
@@ -149,7 +150,7 @@ class UsagedataDB:
             self._service.upsert_latest_appfocusperiod(active_app, active_app_focus_period)
 
             if active_title in apps_titles[active_app]["titles"]:
-                active_title_focus_period: dict[str, dict[int, float]] = self._service.get_latest_titlefocusperiod(active_app, active_title)
+                active_title_focus_period: dict[int, dict[str, int | float]] = self._service.get_latest_titlefocusperiod(active_app, active_title)
                 if current_hour not in active_title_focus_period:
                     active_title_focus_period[current_hour] = {
                         "focus_duration": 0,
@@ -199,8 +200,8 @@ class UsagedataDB:
 
         # Update active app and title
         if active_app and active_title:
-            self.active_app: str = active_app
-            self.active_title: str = active_title
+            self.active_app = active_app
+            self.active_title = active_title
 
         today_log["monotonic_last_updated"] = now
 
@@ -212,12 +213,12 @@ class UsagedataDB:
 
         return self._service.get_daylog_ids()
 
-    def get_recent_daylog(self, columns: tuple[str] | None = None) -> dict[str, float | int]:
+    def get_recent_daylog(self, columns: tuple[str] | None = None) -> dict[str, str | int | float]:
         self._ensure_log_integrity()
 
-        return self._service.get_latest_applog_titlelog(columns)
+        return self._service.get_latest_daylog(columns)
 
-    def get_daylog(self, day_log_id: int, columns: tuple[str] | None = None) -> dict[str, float | int]:
+    def get_daylog(self, day_log_id: int, columns: tuple[str] | None = None) -> dict[str, str | int | float]:
         self._ensure_log_integrity()
 
         return self._service.get_daylog(day_log_id, columns)
@@ -240,8 +241,10 @@ class UsagedataDB:
     def get_mostused_app(self, app_names: tuple[str]) -> str | None:
         self._ensure_log_integrity()
 
-        total_durations_today: tuple[float] = tuple(self._service.get_totalduration(app_name, (self._service.get_latest_daylog_id(),)) for app_name in app_names)
-        total_durations_historical: tuple[float] = tuple(self._service.get_totalduration(app_name, self._service.get_daylog_ids()[:-1]) for app_name in app_names)
+        day_log_ids: tuple = tuple(self._service.get_daylog_ids())
+
+        total_durations_today: tuple = tuple(self._service.get_totalduration(app_name, day_log_ids[-1]) for app_name in app_names)
+        total_durations_historical: tuple = tuple(self._service.get_totalduration(app_name, day_log_ids[:-1]) for app_name in app_names)
 
         total_durations_weighted = tuple(map(
             lambda total_durations: settings.class_day_historical_weight * total_durations[1] + (1 - settings.class_day_historical_weight) * total_durations[0],

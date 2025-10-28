@@ -3,7 +3,7 @@ import sys
 import subprocess
 import time
 
-def install_package(env: list[str], package: list[str], retries: int = 3, delay: int = 2):
+def install_package(env: list[str], package: list[str], retries: int = 3):
     global_env = os.environ.copy()
     for variable in env:
         key, value = variable.split('=')

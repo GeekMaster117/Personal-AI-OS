@@ -1,13 +1,16 @@
 import threading
+
 import heapq
+
 import textwrap
+
 from datetime import datetime
 
+import settings
 from Include.subsystem.usagedata_db import UsagedataDB
 from Include.service.suggestion_engine_service import SuggestionEngineService
 from Include.service.suggestion_engine_service import SuggestionType
 from Include.loading_spinner import loading_spinner
-import settings
 
 class SuggestionEngine:
     def __init__(self, db_handler: UsagedataDB):
@@ -43,7 +46,7 @@ class SuggestionEngine:
         else:
             return f"{hour - 12} PM"
 
-    def _round_off(self, seconds: float) -> int:
+    def _round_off(self, seconds: float) -> str:
         if seconds >= 3600:
             hours = seconds / 3600
             return f"{hours:.1f} hours"
@@ -54,7 +57,7 @@ class SuggestionEngine:
             return f"{round(seconds)} seconds"
         
     def _aggregate_focus_hours(self, focus_period: dict[int, dict[str, float]]) -> list[str]:
-        hours = sorted(focus_period.keys()) + [float("inf")]
+        hours = sorted(focus_period.keys()) + [100]
         aggregated_hours = []
         start = prev = hours[0]
 
@@ -98,12 +101,9 @@ class SuggestionEngine:
     #   }
     # }
     def _top_data(self, day_log_id: int, only_apps: bool = False, aggregate: bool = False) -> dict:
-        apps_titles = self._db_handler.get_applog_titlelog(day_log_id)
+        apps_titles: dict = self._db_handler.get_applog_titlelog(day_log_id)
 
-        apps_titles = heapq.nlargest(settings.data_limit, apps_titles.items(), key=lambda x: self._score(x[1]))
-
-        #dict gets converted to tuple by heapq.nlargest, so we convert it back to dict
-        apps_titles = dict(apps_titles)
+        apps_titles = dict(heapq.nlargest(settings.data_limit, apps_titles.items(), key=lambda x: self._score(x[1])))
 
         for app_name, app_data in apps_titles.items():
             if aggregate:
@@ -128,7 +128,7 @@ class SuggestionEngine:
         return apps_titles
 
     def _preprocess_log_detailed(self, day_log_id: int) -> None:
-        day_log = self._db_handler.get_daylog(day_log_id, ('time_anchor',))
+        day_log: dict = self._db_handler.get_daylog(day_log_id, ('time_anchor',))
         apps_titles = self._top_data(day_log_id)
 
         summary = textwrap.dedent(f"""
@@ -174,7 +174,7 @@ class SuggestionEngine:
         self.preprocessed_logs[day_log_id] = summary
 
     def _preprocess_log_condensed(self, day_log_id: int) -> None:
-        day_log = self._db_handler.get_daylog(day_log_id, ('time_anchor',))
+        day_log: dict = self._db_handler.get_daylog(day_log_id, ('time_anchor',))
         apps = self._top_data(day_log_id, only_apps=True, aggregate=True)
 
         summary = textwrap.dedent(f"""

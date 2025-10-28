@@ -1,4 +1,4 @@
-app_blacklist: set[str] = {
+app_blacklist: frozenset[str] = frozenset([
     "textinputhost.exe",
     "applicationframehost.exe",
     "dllhost.exe",
@@ -11,9 +11,9 @@ app_blacklist: set[str] = {
     "systemhost.exe",
     "searchhost.exe",
     "video.ui.exe"
-}
+])
 
-title_blacklist: set[str] = {
+title_blacklist: frozenset[str] = frozenset([
     "desktopwindowxamlsource",
     "chrome legacy window",
     "default ime",
@@ -21,11 +21,11 @@ title_blacklist: set[str] = {
     "ok",
     "cancel",
     "ok, don't show again"
-}
+])
 
-specific_title_blacklist: dict[str, set[str]] = {
-    "explorer.exe": {
+specific_title_blacklist: dict[str, frozenset[str]] = {
+    "explorer.exe": frozenset([
         "running applications",
         "program manager"
-    }
+    ])
 }

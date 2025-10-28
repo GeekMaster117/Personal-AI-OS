@@ -7,7 +7,7 @@
                 "type": "any",
                 "format": "\"\" ",
                 "required": true,
-                "description": "Application name"
+                "description": "App/Nickname/Class name"
             }
         ],
         "description": "Open an application",

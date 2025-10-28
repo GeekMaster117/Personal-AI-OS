@@ -1,27 +1,28 @@
-from Include.wrapper.sqlite_wrapper import SQLiteWrapper
+from typing import Any
 
 import settings
+from Include.wrapper.sqlite_wrapper import SQLiteWrapper
 
 class UsagedataService:
-    _day_log_columns: set[str] = {
+    _day_log_columns: tuple = (
         "time_anchor",
         "monotonic_start",
         "monotonic_last_updated",
         "total_downtime_duration",
         "total_anomalies"
-    }
-    _app_log_columns: set[str] = {
+    )
+    _app_log_columns: tuple = (
         "executable_path",
         "total_duration",
         "total_focus_duration",
         "total_focus_count"
-    }
-    _title_log_columns: set[str] = {
+    )
+    _title_log_columns: tuple = (
         "total_duration",
         "total_focus_duration",
         "total_focus_count"
-    }
-    _focus_period_columns: tuple[str] = (
+    )
+    _focus_period_columns: tuple = (
         "day_hour",
         "focus_duration",
         "focus_count"
@@ -202,7 +203,7 @@ class UsagedataService:
 
         return self.get_titlefocusperiod(latest_day_log_id, app_name, title_name)
     
-    def get_totalduration(self, app_name: str, day_log_ids: tuple[int]) -> int:
+    def get_totalduration(self, app_name: str, day_log_ids: tuple[int]) -> float:
         def get_query() -> str:
             day_placeholders = ','.join(['?'] * len(day_log_ids))
 
@@ -234,9 +235,9 @@ class UsagedataService:
             UPDATE day_log SET {', '.join(columns)}
             WHERE id = (SELECT id FROM day_log ORDER BY id DESC LIMIT 1);
         """
-        self._db.execute(query, values)
+        self._db.execute(query, tuple(values))
 
-    def upsert_latest_applog_titlelog(self, apps_titles: dict[str, dict[str, int | float | dict[str, str | int | float]]]) -> None:
+    def upsert_latest_applog_titlelog(self, apps_titles: dict[str, dict]) -> None:
         if not apps_titles:
             return
 
@@ -278,15 +279,15 @@ class UsagedataService:
                 
             executable_path = app_data.get('executable_path', '')
 
-            total_duration = app_data.get('total_duration', 0)
+            total_duration: int = app_data.get('total_duration', 0)
             if total_duration < 0:
                 raise ValueError(f"Invalid duration: {total_duration}")
 
-            total_focus_duration = app_data.get('total_focus_duration', 0)
+            total_focus_duration: int = app_data.get('total_focus_duration', 0)
             if total_focus_duration < 0:
                 raise ValueError(f"Invalid duration: {total_focus_duration}")
 
-            total_focus_count = app_data.get('total_focus_count', 0)
+            total_focus_count: int = app_data.get('total_focus_count', 0)
             if total_focus_count < 0:
                 raise ValueError(f"Invalid focus count: {total_focus_count}")
             
@@ -297,15 +298,15 @@ class UsagedataService:
                     if title_column not in UsagedataService._title_log_columns:
                         raise ValueError(f"Invalid column name: {title_column}")
 
-                total_duration = title_data.get('total_duration', 0)
+                total_duration: int = title_data.get('total_duration', 0)
                 if total_duration < 0:
                     raise ValueError(f"Invalid duration: {total_duration}")
 
-                total_focus_duration = title_data.get('total_focus_duration', 0)
+                total_focus_duration: int = title_data.get('total_focus_duration', 0)
                 if total_focus_duration < 0:
                     raise ValueError(f"Invalid duration: {total_focus_duration}")
 
-                total_focus_count = title_data.get('total_focus_count', 0)
+                total_focus_count: int = title_data.get('total_focus_count', 0)
                 if total_focus_count < 0:
                     raise ValueError(f"Invalid focus count: {total_focus_count}")
                 

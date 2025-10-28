@@ -14,15 +14,10 @@ class ExitCodes(Enum):
 
 class Parser:
     def __init__(self, environment: settings.Environment):
-        self._service: ParserService | None = None
         try:
             self._service = ParserService(environment)
         except Exception as e:
             raise RuntimeError(f"Error initialising parser service: {e}")
-        
-    def __del__(self):
-        if self._service is not None:
-            del self._service
         
     def _merge_sort(self, list1: list, list2: list) -> list:
         result = []
@@ -44,7 +39,7 @@ class Parser:
 
         return result
     
-    def _handle_parseraction(self, action: str, arguments: list[str]) -> ExitCodes | None:
+    def _handle_parseraction(self, action: str, arguments: list[str | None]) -> ExitCodes | None:
         # Handle special parser actions, and return if action is handled
 
         exit_code: ExitCodes | None = ExitCodes.CONTINUE
@@ -59,12 +54,15 @@ class Parser:
 
         return exit_code
     
-    def _preprocess_arguments(self, action: str, arguments: list[str]) -> Any:
+    def _preprocess_arguments(self, action: str, arguments: list[str | None]) -> Any:
         # Preprocess arguments based on action type, and returns any data needed for later
 
         preprocess_data: Any = None
 
         if action == "start":
+            if arguments[0] is None:
+                raise ValueError("App/Nickname/Class cannot be None for 'start' action")
+            
             preprocess_data = self._service.extract_app(arguments[0])
             if preprocess_data is None:
                 raise ValueError(f"Could not find app/nickname/class {arguments[0]}. Try having the app open, running in background.")
@@ -73,10 +71,12 @@ class Parser:
             arguments[0] = executable_path
 
         for idx in range(len(arguments)):
-            if arguments[idx] is None:
+            argument = arguments[idx]
+
+            if argument is None:
                 arguments[idx] = ''
             else:
-                arguments[idx] = self._service.get_argument_format(action, idx) + '"' + arguments[idx] + '"'
+                arguments[idx] = self._service.get_argument_format(action, idx) + '"' + argument + '"'
 
         return preprocess_data
     
@@ -85,11 +85,14 @@ class Parser:
 
         if action == "start":
             self._service.handle_nickname_class(data)
+
+    def close(self):
+        self._service.close()
         
-    def extract_action_arguments(self, query: str, probability_cutoff: float = 0.85) -> tuple[str, list[str]] | tuple[None, None]:
+    def extract_action_arguments(self, query: str, probability_cutoff: float = 0.85) -> tuple[str, list[str | None]] | tuple[None, None]:
         # Extract tokens from query
         try:
-            tokens: list[tuple[str | bool]] = self._service.extract_tokens(query)
+            tokens: list[tuple[str, bool]] = self._service.extract_tokens(query)
         except Exception as e:
             raise SyntaxError(f"Syntax Error: {e}")
 
@@ -109,8 +112,8 @@ class Parser:
             action = self._service.predict_action_frequency(action_keywords, probability_cutoff)
 
             if not action:
-                action, skip = self._service.predict_action_classification(action_keywords, 5, probability_cutoff)
-                if skip:
+                action = self._service.predict_action_classification(action_keywords, 5, probability_cutoff)
+                if action is None:
                     return None, None
         except Exception as e:
             raise RuntimeError(f"Error predicting action: {e}")
@@ -139,7 +142,7 @@ class Parser:
         argument_keywords, non_keywords = [], set()
         for group in argument_groups:
             try:
-                argument_index = self._service.predict_argument_frequency(action, group[0], probability_cutoff)
+                argument_index = self._service.predict_argument_frequency(action, [group[0]], probability_cutoff)
                 if argument_index is None:
                     argument_index = self._service.predict_argument_classification(action, group[0], probability_cutoff)
             except Exception as e:
@@ -150,11 +153,13 @@ class Parser:
                 non_keywords.update(group[1])
             else:
                 if argument_keywords:
-                    merged_argument_groups((argument_keywords, non_keywords))
+                    merged_argument_groups.append((argument_keywords, non_keywords))
+
+                    argument_keywords, non_keywords = [], set()
 
                 predicted_arguments[argument_index].extend(group[1])
         if argument_keywords:
-            merged_argument_groups((argument_keywords, non_keywords))
+            merged_argument_groups.append((argument_keywords, non_keywords))
 
         del argument_groups, argument_keywords, non_keywords
         
@@ -165,14 +170,16 @@ class Parser:
             try:
                 argument_index = self._service.predict_argument_frequency(action, group[0], probability_cutoff)
                 if argument_index is None:
-                    argument_index, non_keyword, skip = self._service.predict_argument_nonkeyword_classification(action, group, 5, probability_cutoff)
-                    if skip:
+                    argument_index, non_keyword = self._service.predict_argument_nonkeyword_classification(action, group, 5, probability_cutoff)
+                    if argument_index is None:
                         return None, None
                     
                     if non_keyword:
                         arguments[argument_index] = non_keyword
                     else:
                         predicted_arguments[argument_index].extend(group[1])
+                else:
+                    predicted_arguments[argument_index].extend(group[1])
             except Exception as e:
                 raise RuntimeError(f"Error predicting argument: {e}")
         
@@ -231,7 +238,7 @@ class Parser:
 
         return action, arguments
     
-    def execute_action(self, action : str, arguments: list[str]) -> ExitCodes:
+    def execute_action(self, action : str, arguments: list[str | None]) -> ExitCodes:
         try:
             arguments_count = self._service.get_arguments_count(action)
         except Exception as e:
@@ -251,7 +258,7 @@ class Parser:
         # Preprocess action and arguments before execution
         preprocess_data = self._preprocess_arguments(action, arguments)
             
-        command = " ".join([action] + arguments)
+        command = " ".join([action] + arguments) # type: ignore Preprocessing ensures no None values in arguments
 
         print("Executing Command: " + command)
         subprocess.run(command, shell=True)

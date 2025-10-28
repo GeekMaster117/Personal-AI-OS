@@ -2,23 +2,20 @@ from collections import defaultdict, Counter
 
 import shlex
 
+from typing import Any
+
 from Include.wrapper.parser_wrapper import ParserWrapper
 
 import settings
 
 class ParserService:
     def __init__(self, environment: settings.Environment):
-        self._wrapper: ParserWrapper | None = None
         try:
             self._wrapper = ParserWrapper(environment)
         except Exception as e:
             raise RuntimeError(f"Error initialising parser wrapper: {e}")
-        
-    def __del__(self):
-        if self._wrapper is not None:
-            del self._wrapper
 
-    def _handle_options(self, options: list[str], options_message = "Select an option:", select_message = "Enter an answer", key = lambda x: x) -> int:
+    def _handle_options(self, options: list[Any], options_message = "Select an option:", select_message = "Enter an answer", key = lambda x: x) -> int:
         # An extra option(skip request) is provided to user.
         # If user enters skip request or any number outside given options, -1 is returned.
 
@@ -33,14 +30,14 @@ class ParserService:
         
         return -1
     
-    def _handle_argument_group_options(self, action: str, argument_indices: list[int], argument_group: tuple[list[str], set[tuple]], max_possibilities: int, train: bool) -> tuple[int, str] | tuple[None, None]:
+    def _handle_argument_group_options(self, action: str, argument_indices: list[int], argument_group: tuple[list[str], set[tuple]], max_possibilities: int) -> tuple[int, str] | tuple[None, None]:
         # Generates all possibilities of arguments and non keywords and asks user for correct option.
         # Either returns (argument keyword, non keyword) or (None, None)
 
         argument_keywords, non_keywords = argument_group
 
         try:
-            options = self._extract_argumentgroup_options(action, argument_indices, non_keywords, max_possibilities)
+            options = self._extract_argumentgroup_options(action, argument_indices, list(non_keywords), max_possibilities)
         except SyntaxError as e:
             print("Warning: Too many possibilities")
             raise SyntaxError("Too many possibilities")
@@ -59,12 +56,11 @@ class ParserService:
         
         if answer == -1:
             return None, None
-        
-        if train:
-            try:
-                self._wrapper.train_argument_pipeline(action, argument_keywords, options[answer][0])
-            except Exception as e:
-                print("Warning: Unable to train parser:", e)
+
+        try:
+            self._wrapper.train_argument_pipeline(action, argument_keywords, options[answer][0])
+        except Exception as e:
+            print("Warning: Unable to train parser:", e)
         
         return options[answer]
 
@@ -165,7 +161,7 @@ class ParserService:
         any_type_indices = []
         for argument_index in argument_indices:
             try:
-                type = self._wrapper.get_argument_type(action, argument_index)
+                type: str = self._wrapper.get_argument_type(action, argument_index)
             except Exception as e:
                 raise RuntimeError(f"Error fetching argument type for action '{action}' and argument '{self._wrapper.get_argument_description(action, argument_index)}': {e}")
 
@@ -182,7 +178,7 @@ class ParserService:
 
         for argument_index in any_type_indices:
             try:
-                argument = self._pop_nonkeyword(type, classified_nonkeywords, classified_priority_nonkeywords, throw_if_not_found)
+                argument = self._pop_nonkeyword("any", classified_nonkeywords, classified_priority_nonkeywords, throw_if_not_found)
             except Exception:
                 raise SyntaxError(f"Could not find valid value for argument '{self._wrapper.get_argument_description(action, argument_index)}'")
             
@@ -199,7 +195,7 @@ class ParserService:
 
         return assigned_indicies, unassigned_indices
     
-    def _extract_argumentgroup_options(self, action: str, argument_indices: list[int], non_keywords: set[tuple[str, bool]], throw_if_exceed_count: int = float('inf')) -> list[tuple[int, str]]:
+    def _extract_argumentgroup_options(self, action: str, argument_indices: list[int], non_keywords: list[tuple[str, bool]], throw_if_exceed_count: int = 32) -> list[tuple[int, str]]:
         # Returns all possibilites between each argument index and non keyword.
         # If possibilities exceed by 'throw_if_exceed_count' will throw an error.
 
@@ -266,6 +262,9 @@ class ParserService:
             return
 
         self._wrapper.add_to_class(class_name, app)
+
+    def close(self):
+        del self._wrapper
         
     def canrun_action(self, action: str) -> bool:
         # Checks if action has warning flag set to true, and asks user for permission to run.
@@ -316,7 +315,7 @@ class ParserService:
         
         return max_frequency_action[0] 
 
-    def predict_action_classification(self, action_keywords: list[str], max_possibilities: int, probability_cutoff: float = 0.85) -> tuple[str | None, bool]:
+    def predict_action_classification(self, action_keywords: list[str], max_possibilities: int, probability_cutoff: float = 0.85) -> str | None:
         # Predicts action with classification using action keywords.
         # If confidence is less then probability cutoff, asks user for clarification.
         # Trains classifier using user input.
@@ -327,7 +326,7 @@ class ParserService:
             raise RuntimeError(f"Error extracting top actions: {e}")
         
         if actions[0][1] >= probability_cutoff:
-            return actions[0][0], False
+            return actions[0][0]
         
         try:
             answer = self._handle_options(actions, options_message = "What do you want to do?", key = lambda action: self._wrapper.get_action_description(action[0]))
@@ -336,14 +335,14 @@ class ParserService:
             raise RuntimeError(f"Error fetching answer: {e}")
         
         if answer == -1:
-            return None, True
+            return None
 
         try:
             self._wrapper.train_action_pipeline(action_keywords, actions[answer][0])
         except Exception as e:
             print("Warning: Unable to train parser:", e)
         
-        return actions[answer][0], False
+        return actions[answer][0]
     
     def predict_argument_frequency(self, action: str, argument_keywords: list[str], probability_cutoff: float = 0.85) -> int | None:
         # Predicts argument using frequency of argument keywords.
@@ -370,7 +369,7 @@ class ParserService:
         
         return max_frequency_argument[0]
     
-    def predict_argument_classification(self, action: str, argument_keywords: list[str], probability_cutoff: float = 0.85) -> str | None:
+    def predict_argument_classification(self, action: str, argument_keywords: list[str], probability_cutoff: float = 0.85) -> int | None:
         # Predicts argument with classification using argument keywords.
         # If confidence is less then probability cutoff, returns None.
 
@@ -384,7 +383,7 @@ class ParserService:
         
         return argument_index
     
-    def predict_argument_nonkeyword_classification(self, action: str, argument_group: tuple[list[str], set[tuple]], max_possibilites: int, probability_cutoff: float = 0.85) -> tuple[int, str, bool] | tuple[int, None, bool] | tuple[None, None, bool]:
+    def predict_argument_nonkeyword_classification(self, action: str, argument_group: tuple[list[str], set[tuple]], max_possibilites: int, probability_cutoff: float = 0.85) -> tuple[int, str] | tuple[int, None] | tuple[None, None]:
         # Predicts argument and non keyword with classification using argument group.
         # If confidence of argument is less then probability cutoff, asks user for clarification and trains the classifier.
         # Asks user for clarification is multiple non keywords are suitable candidates for the argument.
@@ -400,14 +399,14 @@ class ParserService:
             raise RuntimeError(f"Error extracting top arguments: {e}")
         
         if arguments[0][1] >= probability_cutoff:
-            return argument_index, None, False
-        else:
-            indices = [arg[0] for arg in arguments]
-            argument_index, non_keyword = self._handle_argument_group_options(action, indices, argument_group, max_possibilites, True)
+            return arguments[0][0], None
         
-        if argument_index is None:
-            return None, None, True
-        return argument_index, non_keyword, False
+        indices = [arg[0] for arg in arguments]
+        argument_index, non_keyword = self._handle_argument_group_options(action, indices, argument_group, max_possibilites)
+        
+        if argument_index is None or non_keyword is None:
+            return None, None
+        return argument_index, non_keyword
             
     def extract_tokens(self, query: str) -> list[tuple[str, bool]]:
         # Extracts tokens from query.
@@ -464,13 +463,13 @@ class ParserService:
 
         return action_keywords, action_groups
     
-    def extract_argument_groups(self, action: str, action_groups: list[list[tuple]], probability_cutoff: float = 0.85) -> tuple[list[tuple], list[str]]:
+    def extract_argument_groups(self, action: str, action_groups: list[list[tuple]], probability_cutoff: float = 0.85) -> tuple[list[tuple], list[tuple]]:
         # Extracts a list of argument keywords and their related non keywords, and a list of unrelated non keywords.
         # If a token is an argument keyword (predicted using fuzzy matching) add it to argument keywords, else to non keywords.
         # If a group has no argument keywords then add the non keywords to blind non keywords.
 
-        argument_groups = []
-        blind_non_keywords = []
+        argument_groups: list[tuple] = []
+        blind_non_keywords: list[tuple] = []
 
         for group in action_groups:
             argument_keyword: str | None = None
@@ -488,7 +487,7 @@ class ParserService:
 
                 if keyword:
                     if argument_keyword:
-                        argument_groups.append(([argument_keyword], non_keywords))
+                        argument_groups.append((argument_keyword, non_keywords))
                     else:
                         blind_non_keywords.extend(non_keywords)
 
@@ -504,7 +503,7 @@ class ParserService:
                     raise RuntimeError(f"Error checking stop word: {e}")
 
             if argument_keyword:
-                argument_groups.append(([argument_keyword], non_keywords))
+                argument_groups.append((argument_keyword, non_keywords))
             else:
                 blind_non_keywords.extend(non_keywords)
             
@@ -529,7 +528,7 @@ class ParserService:
 
         return classified_nonkeywords, classified_priority_nonkeywords
     
-    def extract_argument_indices_information(self, action: str, arguments: list[str]) -> tuple[list[tuple], list[tuple], list[int], list[int]]:
+    def extract_argument_indices_information(self, action: str, arguments: list[str | None]) -> tuple[list[tuple], list[tuple], list[int], list[int]]:
         # Extracts information which required and optional arguments have been assigned, which required and optional arguments haven't been assigned.
 
         try:
@@ -631,5 +630,5 @@ class ParserService:
 
         return self._wrapper.get_arguments_count(action)
     
-    def get_executablepath(self, app: str) -> str | None:
+    def get_executablepath(self, app: str) -> str:
         return self._wrapper.get_executablepath(app)

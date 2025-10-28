@@ -5,7 +5,7 @@ with warnings.catch_warnings():
     warnings.simplefilter("ignore")
     try:
         import pycuda.driver as cuda
-        cuda.init()
+        cuda.init() # type: ignore If any error occurs, cuda is disabled
         CUDA_AVAILABLE = True
     except:
         CUDA_AVAILABLE = False
@@ -35,14 +35,15 @@ class LlamaCPP:
             debug: bool = False
         ):
         self.debug = debug
-        best_device_info = LlamaCPP._get_device_info(gpu_optimal_batchsize, cpu_optimal_batchsize, gpu = gpu_acceleration)
+        best_device_info: dict = LlamaCPP._get_device_info(gpu_optimal_batchsize, cpu_optimal_batchsize, gpu = gpu_acceleration)
 
         if best_device_info['arch'] in settings.supported_arch:
             ctypes.CDLL(settings.library_dir + "/llama.dll")
 
         import llama_cpp
 
-        self.debug and print("Initialising LLM...", flush=True)
+        if self.debug:
+            print("Initialising LLM...", flush=True)
 
         devnull = open(os.devnull, 'w')
         with contextlib.redirect_stdout(devnull), contextlib.redirect_stderr(devnull):
@@ -69,6 +70,7 @@ class LlamaCPP:
         with open(cache_dir, "rb") as file:
             self.llm.load_state(pickle.load(file))
 
+    @staticmethod
     def _get_device_info(gpu_optimal_batchsize: int, cpu_optimal_batchsize: int, gpu: bool = True, debug: bool = False) -> dict[str, str | int]:
         #Total RAM used = layers * [(total_layers / model_size) + (window_size * KV cache per token per layer) + (batch_size * activations_per_token)]
         #All the calculations below happen in MB
@@ -83,20 +85,27 @@ class LlamaCPP:
 
         best_device_info = None
         if CUDA_AVAILABLE and gpu:
-            debug and print("Checking support for GPU accleration...", flush=True)
+            if debug:
+                print("Checking support for GPU accleration...", flush=True)
+            
             best_device_info = LlamaCPP._get_gpu_info(gpu_optimal_batchsize, layer_size, total_kvcache, activations_token)
-            if best_device_info["batch_size"] == 0:
-                debug and print("Insufficient GPU memory.")
+            if best_device_info is not None and best_device_info["batch_size"] == 0:
+                if debug:
+                    print("Insufficient GPU memory.")
+                
                 best_device_info = None
 
         if not best_device_info:
-            debug and print("Skipping GPU acceleration.")
+            if debug:
+                print("Skipping GPU acceleration.")
+            
             best_device_info = LlamaCPP._get_cpu_info(cpu_optimal_batchsize, layer_size, total_kvcache, activations_token)
         
         if best_device_info['batch_size'] == 0:
             raise RuntimeError("Not enough memory to load the model. Please try closing other applications.")
         return best_device_info
 
+    @staticmethod
     def _get_optimal_config(free_memory, total_layers, layers_loaded, layer_size, total_kv_cache, activations_token, compute_optimal_batchsize) -> dict[str, float | int]:
         # Memory used by layers = (No.of Layers * Size of each Layer) + KV cache per Layer
 
@@ -132,13 +141,14 @@ class LlamaCPP:
 
         return config
 
+    @staticmethod
     def _get_gpu_info(gpu_optimal_batchsize: int, layer_size: float, total_kvcache: float, activations_token: float) -> dict[str, str | int] | None:
         try:
             best_gpu_info: dict | None = None
-            for idx in range(cuda.Device.count()):
-                device = cuda.Device(idx)
+            for idx in range(cuda.Device.count()): # type: ignore If any error occurs, returns None
+                device = cuda.Device(idx) # type: ignore If any error occurs, returns None
                 context = device.make_context()
-                free_mem, total_mem = cuda.mem_get_info()
+                free_mem, total_mem = cuda.mem_get_info() # type: ignore If any error occurs, returns None
                 context.pop()
 
                 if best_gpu_info:
@@ -158,7 +168,7 @@ class LlamaCPP:
             if not best_gpu_info:
                 return
             
-            device = cuda.Device(best_gpu_info['idx'])
+            device = cuda.Device(best_gpu_info['idx']) # type: ignore If any error occurs, returns None
             compute_capability = device.compute_capability()
             arch = (compute_capability[0] * 10) + compute_capability[1]
             best_gpu_info['arch'] = arch
@@ -196,9 +206,10 @@ class LlamaCPP:
 
             return best_gpu_info
         except:
-            return
+            return None
 
-    def _get_cpu_info(cpu_optimal_batchsize: int, layer_size: float, total_kvcache: float, activations_token: float) -> dict[str, str | int] | None:
+    @staticmethod
+    def _get_cpu_info(cpu_optimal_batchsize: int, layer_size: float, total_kvcache: float, activations_token: float) -> dict[str, str | int]:
         memory = psutil.virtual_memory()
         free_mem = memory.free / (1024 ** 2)
         total_mem = memory.total / (1024 ** 2)
@@ -231,14 +242,19 @@ class LlamaCPP:
         cache_dir: str = os.path.join(settings.cache_dir, cache_name + ".bin")
 
         if os.path.exists(cache_dir):
-            self.debug and print('Loading Cache...', flush=True)
+            if self.debug: 
+                print('Loading Cache...', flush=True)
+
             try:
                 self._load_sys_cache(cache_dir)
                 return
             except:
-                self.debug and print('Cache incompatibility detected, Will try caching again.')
+                if self.debug:
+                    print('Cache incompatibility detected, Will try caching again.')
         
-        self.debug and print('Caching for future use...', flush=True)
+        if self.debug:
+            print('Caching for future use...', flush=True)
+
         self._save_sys_cache(system_prompt, cache_dir)
         self._load_sys_cache(cache_dir)
 
@@ -267,7 +283,7 @@ class LlamaCPP:
                 first_chunk = False
                 print("LLM: ", end='', flush=True)
 
-            content = chunk["choices"][0]['text']
+            content = chunk["choices"]['text'] # type: ignore Chunk is CreateCompletionResponse, Pylance treating it like string
             print(content, end='', flush=True)
         print()
 
@@ -276,7 +292,7 @@ class LlamaCPP:
         response = self.llm.create_completion(prompt = test_prompt, max_tokens = max_tokens, temperature=0.1)
         end = time.monotonic()
 
-        usage = response.get('usage', {})
+        usage = response.get('usage', {}) # type: ignore Respone is CreateCompletionResponse, Pylance treating it like Iterate[CreateCompletionStreamResponse]
         completion_tokens = usage.get('completion_tokens', max_tokens)
 
         #Returns tokens processed per second
@@ -285,6 +301,7 @@ class LlamaCPP:
     def get_token_count(self, prompt: str) -> int:
         return len(self.llm.tokenize(prompt.encode('utf-8')))
     
+    @staticmethod
     def supports_gpu_acceleration() -> bool:
         best_device_info = LlamaCPP._get_device_info(1, 1, gpu = True, debug = False)
         return best_device_info['arch'] != 'cpu'

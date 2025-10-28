@@ -20,8 +20,6 @@ class SuggestionEngineService:
         if not os.path.exists(settings.device_config_dir):
             raise FileNotFoundError(f"Configuration file '{settings.device_config_dir}' not found. Please run the benchmark first.")
 
-        cpu_optimal_batchsize = None
-        gpu_optimal_batchsize = None
         with open(settings.device_config_dir, 'r') as file:
             device_config = json.load(file)
             try:
@@ -35,7 +33,7 @@ class SuggestionEngineService:
             except:
                 raise ValueError("cpu_optimal_batchsize and gpu_optimal_batchsize not found in the configuration file. Please run the benchmark.")
 
-        self._llama = self._initialize_llama(cpu_optimal_batchsize, gpu_optimal_batchsize)
+            self._llama = self._initialize_llama(cpu_optimal_batchsize, gpu_optimal_batchsize)
 
     def _initialize_llama(self, cpu_optimal_batchsize: int, gpu_optimal_batchsize: int) -> LlamaCPP:
         spinner_flag = {"running": True}

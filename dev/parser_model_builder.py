@@ -6,6 +6,8 @@ from pathlib import Path
 
 import joblib
 
+from typing import Any
+
 from sklearn.feature_extraction.text import CountVectorizer
 from sklearn.linear_model import SGDClassifier
 from sklearn.pipeline import make_pipeline, Pipeline
@@ -15,9 +17,9 @@ import settings
 action_keys = {'keywords', 'args', 'description', 'warning'}
 argument_keys = {'keywords', 'type', 'format', 'required', 'description'}
 
-def load_commands(path: str) -> dict:
+def load_commands(path_dir: str) -> dict:
     try:
-        with open(path, "r") as file:
+        with open(path_dir, "r") as file:
             commands: dict = json.load(file)
     except Exception as e:
         raise RuntimeError(f"Error loading commands: {e}")
@@ -34,25 +36,25 @@ def load_commands(path: str) -> dict:
     
     return commands
 
-def clear_directory(path: str) -> None:
+def clear_directory(path_dir: str) -> None:
     try:
-        if Path(path).exists():
-            shutil.rmtree(path)
+        if Path(path_dir).exists():
+            shutil.rmtree(path_dir)
     except Exception as e:
-        raise RuntimeError(f"Error clearing path: {path}")
+        raise RuntimeError(f"Error clearing path: {path_dir}")
 
-def ensure_parents(path: str) -> str:
+def ensure_parents(path_dir: str) -> str:
     try:
-        path: Path = Path(path)
+        path: Path = Path(path_dir)
         path.parent.mkdir(parents = True, exist_ok = True)
     except Exception as e:
         raise RuntimeError(f"Error creating parent directories: {e}")
 
     return str(path)
 
-def dump(object, path: str) -> None:
+def dump(object, path_dir: str) -> None:
     try:
-        joblib.dump(object, path)
+        joblib.dump(object, path_dir)
     except Exception as e:
         raise RuntimeError(f"Error dumping: {e}")
 
@@ -61,14 +63,14 @@ def throw_if_not_valid(structure: dict, keys: set, name = '') -> None:
         if key not in structure:
             raise SyntaxError(f'{key} not found in {name}')
         
-def add_keywords(keyword_map: dict, keywords: list[str], value: str) -> None:
+def add_keywords(keyword_map: dict[Any, set[Any]], keywords: list[Any], value: Any) -> None:
     for keyword in keywords:
         if keyword not in keyword_map:
             keyword_map[keyword] = set()
 
         keyword_map[keyword].add(value)
 
-def make_keywordmaps_pipelines(commands: dict) -> tuple[dict[str, set[str]], dict[str, dict[str, set[str]]], Pipeline, dict[Pipeline]]:
+def make_keywordmaps_pipelines(commands: dict) -> tuple[dict[str, set[str]], dict[str, dict[str, set[str]]], Pipeline, dict[str, Pipeline]]:
     keyword_action_map: dict[str, set[str]] = dict()
     keyword_argument_maps: dict[str, dict[str, set[str]]] = dict()
     action_pipeline: Pipeline = make_pipeline(CountVectorizer(), SGDClassifier(loss="log_loss"))
