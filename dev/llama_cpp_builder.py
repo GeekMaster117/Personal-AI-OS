@@ -142,5 +142,6 @@ class LlamaCPPBuilder:
         else:
             subprocess.check_call(build_command, cwd=build_dir, shell=True)
 
-llama = LlamaCPPBuilder()
-llama.build_llama_cpp()
+if __name__ == "__main__":
+    llama = LlamaCPPBuilder()
+    llama.build_llama_cpp()
