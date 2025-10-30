@@ -57,19 +57,6 @@ class LlamaCPP:
                 verbose = False
             )
 
-    def _save_sys_cache(self, system_prompt: str, cache_dir: str) -> None:
-        self.llm.create_chat_completion(messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": "OK"}
-        ])
-
-        with open(cache_dir, "wb") as file:
-            pickle.dump(self.llm.save_state(), file)
-
-    def _load_sys_cache(self, cache_dir: str) -> None:
-        with open(cache_dir, "rb") as file:
-            self.llm.load_state(pickle.load(file))
-
     @staticmethod
     def _get_device_info(gpu_optimal_batchsize: int, cpu_optimal_batchsize: int, gpu: bool = True, debug: bool = False) -> dict[str, str | int]:
         #Total RAM used = layers * [(total_layers / model_size) + (window_size * KV cache per token per layer) + (batch_size * activations_per_token)]
@@ -235,28 +222,6 @@ class LlamaCPP:
         cpu_info['batch_size'] = config['batch_size']
 
         return cpu_info
-
-    def handle_sys_cache(self, system_prompt: str, cache_name: str) -> None:
-        if not os.path.exists(settings.cache_dir):
-            os.makedirs(settings.cache_dir)
-        cache_dir: str = os.path.join(settings.cache_dir, cache_name + ".bin")
-
-        if os.path.exists(cache_dir):
-            if self.debug: 
-                print('Loading Cache...', flush=True)
-
-            try:
-                self._load_sys_cache(cache_dir)
-                return
-            except:
-                if self.debug:
-                    print('Cache incompatibility detected, Will try caching again.')
-        
-        if self.debug:
-            print('Caching for future use...', flush=True)
-
-        self._save_sys_cache(system_prompt, cache_dir)
-        self._load_sys_cache(cache_dir)
 
     def chat(self, system_prompt: str, user_prompt: str, max_tokens: int = 128, stop: list[str] = [], temperature: float = 0.7, top_p: float = 0.9) -> None:
         full_prompt = f"<|system|>{system_prompt}<|end|>\n<|user|>{user_prompt}<|end|>\n<|assistant|>"

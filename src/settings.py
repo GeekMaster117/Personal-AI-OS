@@ -29,9 +29,6 @@ usagedata_dir: str = "data"
 sql_dir: str = "sql"
 schema_dir: str = os.path.join(sql_dir, "schema.sql")
 
-# Cache directories
-cache_dir: str = "cache"
-
 # Model settings
 model_dir: str = os.path.join("models", "Phi-3-mini-4k-instruct-q4.gguf")
 
