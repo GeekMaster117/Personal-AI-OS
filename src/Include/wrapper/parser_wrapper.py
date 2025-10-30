@@ -503,7 +503,7 @@ class ParserWrapper:
 
         if action not in commands:
             raise ValueError(f"Action '{action}' not found in commands")
-        if "description" not in commands:
+        if "description" not in commands[action]:
             raise ValueError(f"Action '{action}' has no description")
 
         return commands[action]["description"]
