@@ -21,7 +21,7 @@ class ParserWrapper:
 
         self._keyword_action_map: dict[str, set[str]] | None = None
         self._action_pipeline: Any | None = None
-        self._keyword_argument_maps: dict[str, dict[str, set[str]]] = dict()
+        self._keyword_argument_maps: dict[str, dict[str, set[int]]] = dict()
         self._argument_pipelines: dict[str, Any] = dict()
 
         self._app_executablepath_map: dict[str, str] | None = None
@@ -392,7 +392,7 @@ class ParserWrapper:
         
         probabilities: ndarray = argument_pipeline.predict_proba([" ".join(argument_keywords)])[0]
 
-        argument_index = max([(int(argument_pipeline.classes_[idx]), float(probability)) for idx, probability in enumerate(probabilities)])
+        argument_index = max([(int(argument_pipeline.classes_[idx]), float(probability)) for idx, probability in enumerate(probabilities)], key = lambda x: x[1])
 
         if argument_index[1] < probability_cutoff:
             return None
