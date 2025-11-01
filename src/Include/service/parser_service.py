@@ -129,13 +129,13 @@ class ParserService:
             elif type in classified_nonkeywords:
                 borrowed_dict = classified_nonkeywords
 
-            borrowed_types[type] = (0, len(borrowed_dict[type] - 1))
+            borrowed_types[type] = (0, len(borrowed_dict[type]) - 1)
             options.extend(borrowed_dict[type])
 
         if len(borrowed_types) == 1 and len(next(iter(borrowed_dict.values()))) == 1:
             type, non_keywords = borrowed_dict.popitem()
 
-            return non_keywords[0]
+            return non_keywords[0], False
 
         answer = self._handle_options(options, options_message = f"What is, {description}")
         print("-----------------------------")
@@ -157,6 +157,9 @@ class ParserService:
     def _extract_arguments_typemapping(self, action: str, argument_indices: list[int], classified_nonkeywords: dict, classified_priority_nonkeywords: dict, throw_if_not_found: bool = False) -> tuple[list[tuple], list[int]]:
         # Tries to map non-any types first, then maps any type
 
+        unassigned_indices = []
+        assigned_indicies = []
+
         arguments = []
         any_type_indices = []
         for argument_index in argument_indices:
@@ -165,15 +168,17 @@ class ParserService:
             except Exception as e:
                 raise RuntimeError(f"Error fetching argument type for action '{action}' and argument '{self._wrapper.get_argument_description(action, argument_index)}': {e}")
 
-            if type == "any":
-                any_type_indices.append(len(arguments))
-                arguments.append(None)
-            else:
+            argument: str | None = None
+            if type != "any":
                 try:
                     argument = self._pop_nonkeyword(type, classified_nonkeywords, classified_priority_nonkeywords, throw_if_not_found)
                 except Exception:
                     raise SyntaxError(f"Could not find valid value for argument '{self._wrapper.get_argument_description(action, argument_index)}'")
 
+            if argument is None:
+                any_type_indices.append(argument_index)
+                arguments.append(None)
+            else:
                 arguments.append((argument_index, argument))
 
         for argument_index in any_type_indices:
@@ -182,11 +187,9 @@ class ParserService:
             except Exception:
                 raise SyntaxError(f"Could not find valid value for argument '{self._wrapper.get_argument_description(action, argument_index)}'")
             
-            if argument:
+            if argument is not None:
                 arguments[argument_index] = (argument_index, argument)
 
-        unassigned_indices = []
-        assigned_indicies = []
         for argument_index, argument in enumerate(arguments):
             if argument:
                 assigned_indicies.append(argument)
@@ -264,7 +267,7 @@ class ParserService:
         self._wrapper.add_to_class(class_name, app)
 
     def close(self):
-        del self._wrapper
+        self._wrapper.close()
         
     def canrun_action(self, action: str) -> bool:
         # Checks if action has warning flag set to true, and asks user for permission to run.

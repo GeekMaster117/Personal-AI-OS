@@ -40,11 +40,6 @@ class ParserWrapper:
             self._observe = subprocess.Popen([sys.executable, "src/observe.py"], stdin=subprocess.DEVNULL, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         else:
             raise ValueError(f"Invalid environment: '{environment}'. Valid options are: {[env.value for env in settings.Environment]}")
-
-    def __del__(self):
-        if self._observe is not None:
-            self._observe.terminate()
-            self._observe.wait()
         
     def _load_commands(self) -> dict:
         # Loads commands from file
@@ -267,6 +262,11 @@ class ParserWrapper:
             self._apps_in_class = all_apps
 
         return self._apps_in_class
+    
+    def close(self):
+        if self._observe is not None:
+            self._observe.terminate()
+            self._observe.wait()
     
     def has_nicknames(self, app: str) -> bool:
         # Returns whether an app has nicknames
