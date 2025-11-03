@@ -2,7 +2,6 @@ import pytest
 from unittest.mock import patch, MagicMock
 from collections import defaultdict
 
-import settings
 from Include.service.parser_service import ParserService
 
 def make_mock_service():
@@ -673,7 +672,6 @@ def test_handle_nickname_success(monkeypatch, test_case):
         "name": "user_declines_class_assignment",
         "app": "chrome",
         "first_answer": 1,  # selects "No"
-        "expected_calls": [],
         "description": "User chooses not to add the app to a class"
     },
     {
@@ -701,7 +699,6 @@ def test_handle_nickname_success(monkeypatch, test_case):
         "first_answer": 0,
         "second_answer": 99,  # invalid index
         "classes": ["Office"],
-        "expected_calls": [],
         "description": "User provides invalid class index, no class is added"
     }
 ])
@@ -746,3 +743,528 @@ def test_handle_class(monkeypatch, test_case):
         )
     else:
         service._wrapper.add_to_class.assert_not_called()
+
+@pytest.mark.parametrize("test_case", [
+	{
+		"name": 'warning_true_user_yes',
+		"warning": True,
+		"input": 'y',
+		'expected': True
+	},
+	{
+		"name": 'warning_true_user_no',
+		"warning": True,
+		"input": 'n',
+		'expected': False
+	},
+	{
+		"name": 'warning_true_user_random',
+		"warning": True,
+		"input": 'test',
+		'expected': False
+	},
+	{
+		"name": 'warning_false',
+		"warning": False,
+		'expected': True
+	},
+])
+def test_can_run_action(monkeypatch, test_case):
+	service = make_mock_service()
+	service._wrapper.has_action_warning = MagicMock(return_value = test_case['warning'])
+	monkeypatch.setattr("builtins.input", lambda _: test_case["input"])
+
+	result = service.canrun_action('test')
+
+	assert result == test_case['expected']
+
+@pytest.mark.parametrize("test_case", [
+	{
+		"name": 'nickname_true',
+		"nickname": True,
+		'class': False,
+		'assert': False
+	},
+	{
+		"name": 'class_true',
+		'nickname': False,
+		"class": True,
+		'assert': False
+	},
+	{
+		"name": 'nickname_false_class_false',
+		"nickname": False,
+		'class': False,
+		'assert': True
+	},
+	{
+		"name": 'nickname_true_class_true',
+		"nickname": True,
+		'class': True,
+		'assert': False
+	}
+])
+def test_handle_nickname_class(test_case):
+	service = make_mock_service()
+	service._wrapper.has_nicknames = lambda app: test_case['nickname']
+	service._wrapper.in_class = lambda app: test_case['class']
+
+	service._handle_nickname = MagicMock()
+	service._handle_class = MagicMock()
+
+	service.handle_nickname_class('test')
+
+	if test_case['assert']:
+		service._handle_nickname.assert_called_once()
+		service._handle_class.assert_called_once()
+	else:
+		service._handle_nickname.assert_not_called()
+		service._handle_class.assert_not_called()
+
+@pytest.mark.parametrize("test_case", [
+	{
+		'name': 'single_action',
+		'keywords': ['keyword1', 'keyword2'],
+		'map': {
+			'keyword1': {'action'},
+			'keyword2': {'action'}
+		},
+		'expected': 'action'
+	},
+	{
+		'name': 'multiple_actions',
+		'keywords': ['keyword1', 'keyword2', 'keyword3'],
+		'map': {
+			'keyword1': {'action1'},
+			'keyword2': {'action1'},
+			'keyword3': {'action2'}
+		},
+		'expected': 'action1'
+	},
+	{
+		'name': 'less_frequency',
+		'keywords': ['keyword1', 'keyword2', 'keyword3'],
+		'map': {
+			'keyword1': {'action1'},
+			'keyword2': {'action2'},
+			'keyword3': {'action3'}
+		},
+		'expected': None
+	},
+	{
+		'name': 'single_keyword_multiple_actions',
+		'keywords': ['keyword1', 'keyword2'],
+		'map': {
+			'keyword1': {'action1', 'action2'},
+			'keyword2': {'action2'}
+		},
+		'expected': 'action2'
+	}
+])
+def test_predict_action_frequency(test_case):
+	service = make_mock_service()
+	service._wrapper.get_actions_for_keyword = lambda action_keyword: test_case['map'][action_keyword]
+
+	result = service.predict_action_frequency(test_case['keywords'], 0.5)
+
+	assert result == test_case['expected']
+
+@pytest.mark.parametrize("test_case", [
+	{
+		'name': 'high_probability',
+		'actions': [('action1', 0.7), ('action2', 0.3)],
+		'expected': 'action1'
+	},
+	{
+		'name': 'user_choice',
+		'actions': [('action1', 0.4), ('action2', 0.4), ('action3', 0.2)],
+		'input': '1',
+		'expected': 'action1'
+	},
+	{
+		'name': 'skip_request',
+		'actions': [('action1', 0.4), ('action2', 0.4), ('action3', 0.2)],
+		'input': '4',
+		'expected': None
+	},
+	{
+		'name': 'invalid_input',
+		'actions': [('action1', 0.4), ('action2', 0.4), ('action3', 0.2)],
+		'input': '99',
+		'expected': None
+	}
+])
+def test_predict_action_classification(monkeypatch, test_case):
+	service = make_mock_service()
+	service._wrapper.predict_top_actions = lambda action_keywords, max_possibilities, probability_cutoff: test_case['actions']
+	service._wrapper.get_action_description = MagicMock()
+	monkeypatch.setattr("builtins.input", lambda _: test_case["input"])
+	service._wrapper.train_action_pipeline = MagicMock()
+
+	result = service.predict_action_classification([], 5, 0.5)
+
+	assert result == test_case['expected']
+
+@pytest.mark.parametrize("test_case", [
+	{
+		'name': 'single_argument',
+		'keywords': ['keyword1', 'keyword2'],
+		'map': {
+			'keyword1': {'argument'},
+			'keyword2': {'argument'}
+		},
+		'expected': 'argument'
+	},
+	{
+		'name': 'multiple_arguments',
+		'keywords': ['keyword1', 'keyword2', 'keyword3'],
+		'map': {
+			'keyword1': {'argument1'},
+			'keyword2': {'argument1'},
+			'keyword3': {'argument2'}
+		},
+		'expected': 'argument1'
+	},
+	{
+		'name': 'less_frequency',
+		'keywords': ['keyword1', 'keyword2', 'keyword3'],
+		'map': {
+			'keyword1': {'argument1'},
+			'keyword2': {'argument2'},
+			'keyword3': {'argument3'}
+		},
+		'expected': None
+	},
+	{
+		'name': 'single_keyword_multiple_arguments',
+		'keywords': ['keyword1', 'keyword2'],
+		'map': {
+			'keyword1': {'argument1', 'argument2'},
+			'keyword2': {'argument2'}
+		},
+		'expected': 'argument2'
+	}
+])
+def test_predict_argument_frequency(test_case):
+	service = make_mock_service()
+	service._wrapper.get_argument_indices_for_keyword = lambda action, argument_keyword: test_case['map'][argument_keyword]
+
+	result = service.predict_argument_frequency('action', test_case['keywords'], 0.5)
+
+	assert result == test_case['expected']
+
+@pytest.mark.parametrize("test_case", [
+	{
+		'name': 'high_probability',
+		'arguments': [(0, 0.7), (1, 0.3)],
+		'argument_group': ([], {('nk1', False), ('nk2', False)}),
+		'expected': [(0, None)]
+	},
+	{
+		'name': 'user_choice_priority',
+		'arguments': [(0, 0.4), (1, 0.4), (2, 0.2)],
+		'argument_group': ([], {('nk1', True), ('nk2', False)}),
+		'input': '1',
+		'expected': [(0, 'nk1')]
+	},
+	{
+		'name': 'user_choice_nonpriority',
+		'arguments': [(0, 0.4), (1, 0.4), (2, 0.2)],
+		'argument_group': ([], {('nk1', False), ('nk2', False)}),
+		'input': '1',
+		'expected': [(0, 'nk1'), (0, 'nk2')]
+	},
+	{
+		'name': 'skip_request',
+		'arguments': [(0, 0.4), (1, 0.4), (2, 0.2)],
+		'argument_group': ([], {('nk1', False), ('nk2', False)}),
+		'input': '7',
+		'expected': [(None, None)]
+	},
+	{
+		'name': 'invalid_input',
+		'arguments': [(0, 0.4), (1, 0.4), (2, 0.2)],
+		'argument_group': ([], {('nk1', False), ('nk2', False)}),
+		'input': '99',
+		'expected': [(None, None)]
+	}
+])
+def test_predict_argument_nonkeyword_classification(monkeypatch, test_case):
+	service = make_mock_service()
+	service._wrapper.predict_top_arguments_indices = lambda action, keywords, max_possibilities, probability_cutoff: test_case['arguments']
+	service._wrapper.get_argument_description = MagicMock()
+	service._wrapper.get_argument_type = MagicMock(return_value = 'any')
+	monkeypatch.setattr("builtins.input", lambda _: test_case["input"])
+	service._wrapper.train_argument_pipeline = MagicMock()
+
+	result = service.predict_argument_nonkeyword_classification('', test_case['argument_group'], 10, 0.5)
+
+	assert any(result == expected for expected in test_case['expected'])
+
+@pytest.mark.parametrize("test_case", [
+	{
+		'name': 'whitespace_seperated',
+		'query': 'word1 word2',
+		'expected': [('word1', False), ('word2', False)],
+		'raises': False
+	},
+	{
+		'name': 'quoted',
+		'query': 'word1 "word2" \'word3\'',
+		'expected': [('word1', False), ('word2', True), ('word3', True)],
+		'raises': False
+	},
+	{
+		'name': 'invalid_quotes',
+		'query': 'word1 "word2 word3',
+		'raises': True
+	},
+	{
+		'name': 'empty_quotes_ignore',
+		'query': 'word1 ""',
+		'expected': [('word1', False)],
+		'raises': False
+	}
+])
+def test_extract_tokens(test_case):
+	service = make_mock_service()
+
+	if test_case['raises']:
+		with pytest.raises(Exception):
+			service.extract_tokens(test_case['query'])
+	else:
+		result = service.extract_tokens(test_case['query'])
+
+		assert result == test_case['expected']
+
+@pytest.mark.parametrize('test_case', [
+	{
+		'name': 'keyword_flush',
+		'query': 'word1 word2 word3',
+		'keywords': {'word2'},
+		'expected': (['word2'], [[('word1', False)], [('word3', False)]])
+	},
+	{
+		'name': 'keyword_quoted',
+		'query': 'word1 "word2" word3',
+		'keywords': {'word2'},
+		'expected': ([], [[('word1', False), ('word2', True), ('word3', False)]])
+	}
+])
+def test_extract_action_groups(test_case):
+	service = make_mock_service()
+	service._wrapper.match_action_keyword = lambda token, probability_cutoff: token if token in test_case['keywords'] else None
+
+	tokens = service.extract_tokens(test_case['query'])
+	result = service.extract_action_groups(tokens)
+
+	assert result == test_case['expected']
+
+@pytest.mark.parametrize('test_case', [
+	{
+		'name': 'nkkeyword_flush',
+		'action_groups': [[('word1', False), ('word2', False), ('word3', False)]],
+		'keywords': {'word2'},
+		'stop_words': set(),
+		'expected': ([('word2', {('word3', False)})], [('word1', False)])
+	},
+	{
+		'name': 'nk_quoted',
+		'action_groups': [[('word1', False), ('word2', False), ('word3', True)]],
+		'keywords': {'word2', 'word3'},
+		'stop_words': set(),
+		'expected': ([('word2', {('word3', True)})], [('word1', False)])
+	},
+	{
+		'name': 'nk_stopword',
+		'action_groups': [[('word1', False), ('word2', False), ('word3', False)]],
+		'keywords': {'word2'},
+		'stop_words': {'word1'},
+		'expected': ([('word2', {('word3', False)})], [])
+	},
+	{
+		'name': 'multiple_action_groups',
+		'action_groups': [[('word1', False), ('word2', False), ('word3', False), ('word4', False)], [('word5', False), ('word6', False)]],
+		'keywords': {'word1', 'word3', 'word5'},
+		'stop_words': set(),
+		'expected': ([('word1', {('word2', False)}), ('word3', {('word4', False)}), ('word5', {('word6', False)})], [])
+	},
+	{
+		'name': 'empty_nonkeyword_flush',
+		'action_groups': [[('word1', False), ('word2', False)]],
+		'keywords': {'word2'},
+		'stop_words': set(),
+		'expected': ([], [('word1', False)])
+	},
+])
+def test_extract_argument_groups(test_case):
+	service = make_mock_service()
+	service._wrapper.match_argument_keyword = lambda action, token, probability_cutoff: token if token in test_case['keywords'] else None
+	service._wrapper.is_stop_word = lambda token, probability_cutoff: token in test_case['stop_words']
+
+	result = service.extract_argument_groups('action', test_case['action_groups'])
+
+	assert result == test_case['expected']
+
+@pytest.mark.parametrize('test_case', [
+	{
+		'name': 'types',
+		'non_keywords': [('string', False), ('123', False), ('string123', False)],
+		'expected': ({
+			'str': ['string'],
+			'int': ['123'],
+			'any': ['string123']
+		}, {})
+	},
+	{
+		'name': 'quoted',
+		'non_keywords': [('string', False), ('123', True), ('string123', False)],
+		'expected': ({
+			'str': ['string'],
+			'any': ['string123']
+		}, {
+			'int': ['123']
+		})
+	}
+])
+def test_extract_classified_nonkeywords(test_case):
+	service = make_mock_service()
+
+	result = service.extract_classified_nonkeywords(test_case['non_keywords'])
+
+	assert result == test_case['expected']
+
+@pytest.mark.parametrize('test_case', [
+	{
+		'name': 'assigned unassigned',
+		'arguments': ['arg1', None, 'arg2'],
+		'required_arguments': [0, 1, 2],
+		'optional_arguments': [],
+		'expected': (
+			[(0, 'arg1'), (2, 'arg2')],
+			[],
+			[1],
+			[]
+		)
+	},
+	{
+		'name': 'required optional',
+		'arguments': ['arg1', None, 'arg2', None],
+		'required_arguments': [0, 1],
+		'optional_arguments': [2, 3],
+		'expected': (
+			[(0, 'arg1')],
+			[(2, 'arg2')],
+			[1],
+			[3]
+		)
+	}
+])
+def test_extract_argument_indices_information(test_case):
+	service = make_mock_service()
+	service._wrapper.get_required_arguments = lambda action: test_case['required_arguments']
+	service._wrapper.get_optional_arguments = lambda action: test_case['optional_arguments']
+
+	result = service.extract_argument_indices_information('action', test_case['arguments'])
+
+	assert result == test_case['expected']
+
+@pytest.mark.parametrize('test_case', [
+	{
+		'name': 'all_type_match',
+		'indices': [0, 1, 2],
+		'types': ['str', 'int', 'any'],
+		'non_keywords': [('string', False), ('123', False), ('string123', False)],
+		'input': '99',
+		'expected': [(0, 'string'), (1, '123'), (2, 'string123')]
+	},
+	{
+		'name': 'borrow_to_any',
+		'indices': [0, 1, 2],
+		'types': ['str', 'int', 'any'],
+		'non_keywords': [('string', False), ('123', False), ('strings', False)],
+		'input': '1',
+		'expected': [(0, 'string'), (1, '123'), (2, 'strings')]
+	},
+	{
+		'name': 'not_enough',
+		'indices': [0, 1, 2],
+		'types': ['str', 'int', 'any'],
+		'non_keywords': [('string', False), ('string123', False)],
+		'input': '99',
+		'expected': [(0, 'string'), (1, None), (2, 'string123')]
+	},
+	{
+		'name': 'priority',
+		'indices': [0, 1],
+		'types': ['str', 'int'],
+		'non_keywords': [('string', True), ('strings', False), ('123', False), ('456', True)],
+		'input': '99',
+		'expected': [(0, 'string'), (1, '456')]
+	}
+])
+def test_extract_arguments_questions_nonkeywords(monkeypatch, test_case):
+	service = make_mock_service()
+	service._wrapper.get_argument_type = lambda action, idx: test_case['types'][idx]
+	service._wrapper.get_argument_description = lambda action, idx: 'description'
+	monkeypatch.setattr("builtins.input", lambda _: test_case["input"])
+
+	result = service.extract_arguments_questions_nonkeywords('action', test_case['indices'], test_case['non_keywords'])
+
+	assert result == test_case['expected']
+
+@pytest.mark.parametrize('test_case', [
+	{
+		'name': 'first_check_existing_app',
+		'existing_app': 1,
+		'monitored_app': 0,
+		'match_nickname': 0,
+		'get_nickname': 0,
+		'match_class': 0,
+		'get_class': 0
+	},
+	{
+		'name': 'second_check_monitored_app',
+		'existing_app': 0,
+		'monitored_app': 1,
+		'match_nickname': 0,
+		'get_nickname': 0,
+		'match_class': 0,
+		'get_class': 0
+	},
+	{
+		'name': 'third_check_nickname',
+		'existing_app': 0,
+		'monitored_app': 0,
+		'match_nickname': 1,
+		'get_nickname': 1,
+		'match_class': 0,
+		'get_class': 0
+	},
+	{
+		'name': 'fourth_check_class',
+		'existing_app': 0,
+		'monitored_app': 0,
+		'match_nickname': 0,
+		'get_nickname': 0,
+		'match_class': 1,
+		'get_class': 1
+	}
+])
+def test_extract_app(test_case):
+	service = make_mock_service()
+	service._wrapper.match_existing_app = MagicMock(return_value = 'app_name' if test_case['existing_app'] else None)
+	service._wrapper.match_monitored_app = MagicMock(return_value = 'app_name' if test_case['monitored_app'] else None)
+	service._wrapper.match_nickname = MagicMock(return_value = 'nickname' if test_case['match_nickname'] else None)
+	service._wrapper.get_app_for_nickname = MagicMock(return_value = 'app_name' if test_case['get_nickname'] else None)
+	service._wrapper.match_class = MagicMock(return_value = 'class' if test_case['match_class'] else None)
+	service._wrapper.get_mostused_app_for_class = MagicMock(return_value = 'app_name' if test_case['get_class'] else None)
+
+	service.extract_app('token')
+
+	assert service._wrapper.match_existing_app.call_count == test_case['existing_app'] if test_case['existing_app'] else True
+	assert service._wrapper.match_monitored_app.call_count == test_case['monitored_app'] if test_case['monitored_app'] else True
+	assert service._wrapper.match_nickname.call_count == test_case['match_nickname'] if test_case['match_nickname'] else True
+	assert service._wrapper.get_app_for_nickname.call_count == test_case['get_nickname'] if test_case['get_nickname'] else True
+	assert service._wrapper.match_class.call_count == test_case['match_class'] if test_case['match_class'] else True
+	assert service._wrapper.get_mostused_app_for_class.call_count == test_case['get_class'] if test_case['get_class'] else True
