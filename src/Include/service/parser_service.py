@@ -132,21 +132,22 @@ class ParserService:
             borrowed_types[type] = (0, len(borrowed_dict[type]) - 1)
             options.extend(borrowed_dict[type])
 
-        if len(borrowed_types) == 1 and len(next(iter(borrowed_dict.values()))) == 1:
-            type, non_keywords = borrowed_dict.popitem()
+        if len(borrowed_types) == 1 and len(borrowed_dict[borrowed_type := next(iter(borrowed_types.keys()))]) == 1:
+            non_keyword = borrowed_dict[borrowed_type].pop()
+            del borrowed_dict[borrowed_type]
 
-            return non_keywords[0], False
+            return non_keyword, False
 
         answer = self._handle_options(options, options_message = f"What is, {description}")
         print("-----------------------------")
         if answer == -1:
             return None, True
 
-        for type, interval in borrowed_types.items():
+        for borrowed_type, interval in borrowed_types.items():
             if interval[0] <= answer <= interval[1]:
-                borrowed_dict[type].remove(options[answer])
-                if not borrowed_dict[type]:
-                    del borrowed_dict[type]
+                borrowed_dict[borrowed_type].remove(options[answer])
+                if not borrowed_dict[borrowed_type]:
+                    del borrowed_dict[borrowed_type]
                 
                 break
         else:
@@ -176,7 +177,7 @@ class ParserService:
                     raise SyntaxError(f"Could not find valid value for argument '{self._wrapper.get_argument_description(action, argument_index)}'")
 
             if argument is None:
-                any_type_indices.append(argument_index)
+                any_type_indices.append(len(arguments))
                 arguments.append(None)
             else:
                 arguments.append((argument_index, argument))
@@ -573,10 +574,10 @@ class ParserService:
 
         return required_arguments, optional_arguments, unassigned_required_indices, unassigned_optional_indices
     
-    def extract_arguments_questions_nonkeywords(self, action: str, argument_indices: list[int], non_keywords: list[tuple[str, bool]]) -> list[tuple] | None:
+    def extract_arguments_questions_nonkeywords(self, action: str, argument_indices: list[int], non_keywords: list[tuple[str, bool]], throw_if_not_found: bool = False) -> list[tuple] | None:
         classified_nonkeywords, classified_priority_nonkeywords = self.extract_classified_nonkeywords(non_keywords)
 
-        return self.extract_arguments_questions_classified_nonkeywords(action, argument_indices, classified_nonkeywords, classified_priority_nonkeywords)
+        return self.extract_arguments_questions_classified_nonkeywords(action, argument_indices, classified_nonkeywords, classified_priority_nonkeywords, throw_if_not_found)
     
     def extract_arguments_questions_classified_nonkeywords(self, action: str, argument_indices: list[int], classified_nonkeywords: dict, classified_priority_nonkeywords: dict, throw_if_not_found: bool = False) -> list[tuple] | None:
         # Extracts arguments by asking questions to user.
@@ -597,18 +598,18 @@ class ParserService:
                 non_keyword, skip = self._pop_nonkeyword_question(type, description, classified_nonkeywords, classified_priority_nonkeywords, throw_if_not_found)
                 if skip:
                     return None
-
-            if non_keyword is None:
-                any_type_indices.append((argument_index, description))
-            else:
+                
                 arguments.append((argument_index, non_keyword))
+            else:
+                any_type_indices.append((len(arguments), description))
+                arguments.append(None)
 
         for argument_index, description in any_type_indices:
             non_keyword, skip = self._pop_nonkeyword_question("any", description, classified_nonkeywords, classified_priority_nonkeywords, throw_if_not_found)
             if skip:
                 return None
             
-            arguments.append((argument_index, non_keyword))
+            arguments[argument_index] = (argument_index, non_keyword)
 
         return arguments
     
