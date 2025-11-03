@@ -480,7 +480,7 @@ class ParserService:
 
             for token, quoted in group:
                 if quoted:
-                    blind_non_keywords.append((token, quoted))
+                    non_keywords.add((token, quoted))
                     continue
                 
                 try:
@@ -490,7 +490,8 @@ class ParserService:
 
                 if keyword:
                     if argument_keyword:
-                        argument_groups.append((argument_keyword, non_keywords))
+                        if non_keywords:
+                            argument_groups.append((argument_keyword, non_keywords))
                     else:
                         blind_non_keywords.extend(non_keywords)
 
@@ -506,7 +507,8 @@ class ParserService:
                     raise RuntimeError(f"Error checking stop word: {e}")
 
             if argument_keyword:
-                argument_groups.append((argument_keyword, non_keywords))
+                if non_keywords:
+                    argument_groups.append((argument_keyword, non_keywords))
             else:
                 blind_non_keywords.extend(non_keywords)
             
@@ -518,11 +520,12 @@ class ParserService:
 
         classified_nonkeywords, classified_priority_nonkeywords = defaultdict(list), defaultdict(list)
         for token, quoted in non_keywords:
-            type = "any"
             if token.isdecimal():
                 type = "int"
             elif token.isalpha():
                 type = "str"
+            else:
+                type = "any"
             
             if quoted:
                 classified_priority_nonkeywords[type].append(token)
@@ -580,18 +583,32 @@ class ParserService:
 
         arguments = []
 
-        for idx in argument_indices:
+        any_type_indices = []
+
+        for argument_index in argument_indices:
             try:
-                type = self._wrapper.get_argument_type(action, idx)
-                description = self._wrapper.get_argument_description(action, idx)
+                type: str = self._wrapper.get_argument_type(action, argument_index)
+                description: str = self._wrapper.get_argument_description(action, argument_index)
             except Exception as e:
                 raise RuntimeError(f"Error fetching argument data: {e}")
-            
-            non_keyword, skip = self._pop_nonkeyword_question(type, description, classified_nonkeywords, classified_priority_nonkeywords, throw_if_not_found)
+
+            non_keyword: str | None = None
+            if type != "any":
+                non_keyword, skip = self._pop_nonkeyword_question(type, description, classified_nonkeywords, classified_priority_nonkeywords, throw_if_not_found)
+                if skip:
+                    return None
+
+            if non_keyword is None:
+                any_type_indices.append((argument_index, description))
+            else:
+                arguments.append((argument_index, non_keyword))
+
+        for argument_index, description in any_type_indices:
+            non_keyword, skip = self._pop_nonkeyword_question("any", description, classified_nonkeywords, classified_priority_nonkeywords, throw_if_not_found)
             if skip:
                 return None
             
-            arguments.append((idx, non_keyword))
+            arguments.append((argument_index, non_keyword))
 
         return arguments
     
